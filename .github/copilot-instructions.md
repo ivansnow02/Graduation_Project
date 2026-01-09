@@ -18,45 +18,50 @@
 
 ## Developer Workflows
 
-- **End-to-End Pipeline**:
-  1. Prepare topics (`datasets/interdisciplinary_topic.json`).
-  2. Generate dialogues: `python multi_dialogue.py` (requires OpenAI API key).
-  3. Annotate: `python annotation.py` (requires vLLM, GPU, tokenizer/model paths).
-  4. Objective metrics: `python objective_eval.py datasets/annotated/*.jsonl --summary-file outputs/_overall_summary_metrics.json`.
-  5. Subjective metrics: `python subjective_eval.py` (judge model API, outputs JSON reports).
-- **Parallelization**: Data generation and annotation use multiprocessing/threading for speed.
-- **Resumable Processing**: Annotation and evaluation scripts support checkpointing and resume from partial outputs.
+```markdown
+# Copilot instructions — quick reference (CollabLLM + SID_Benchmark)
 
-## Project-Specific Patterns
+This file gives immediately actionable guidance for AI coding agents working in this repository. Keep edits short and concrete.
 
-- **Socratic Dialogue**: Teacher only asks questions, no direct answers. Student responses vary by sampled persona/scenario.
-- **Annotation Format**: Each turn is annotated with 9 fixed fields (see `annotation.py` and README for details).
-- **Metrics Calculation**: Objective metrics use strict formulas (see `objective_eval.py`), subjective metrics use judge model with JSON output.
-- **File Naming**: Outputs follow patterns like `multi_dialogue_topic_<topic_id>.json`, annotated files as `.jsonl`.
-- **Config via .env**: All scripts read config from environment variables. Always check `.env` for required keys.
+- Big picture: Core library `collabllm/` (reward computation, dataset classes, sim/synthetic helpers) + benchmark scripts in `scripts/benchmark/` (generation, annotation, objective/subj eval). Data flow: topics → `multi_dialogue.py` → JSON outputs → `annotation.py` → JSONL with `annotations` → `objective_eval.py` / `subjective_eval.py`.
 
-## Integration Points
+- Key files to inspect when changing behavior:
 
-- **OpenAI API**: Used for dialogue generation and subjective evaluation. Configure endpoints in `.env`.
-- **vLLM**: Local annotation requires vLLM and GPU. Set model/tokenizer paths in `.env`.
-- **Judge Model API**: Subjective evaluation via HTTP API, model name in `.env`.
+  - `scripts/benchmark/multi_dialogue.py` — Socratic generation (teacher-only questions), OpenAI-compatible HTTP calls (`call_gpt_segmented`).
+  - `scripts/benchmark/annotation.py` — vLLM-based per-turn 9-field extractor; supports resumable JSONL output and `extract_first_json_array` fallback.
+  - `scripts/benchmark/objective_eval.py` — concrete metric formulas (StrategyDensity, IKT, BP, etc.) and TotalScore weights.
+  - `scripts/benchmark/subjective_eval.py` — judge-model prompts, JSON-parsing fallbacks, threaded evaluation and report generation.
+  - `collabllm/reward.py` — multiturn-aware reward helpers used by training scripts.
+  - `collabllm/prompts/` — canonical prompts used across scripts.
 
-## Examples
+- Environment & run hints (must-check before running):
 
-- To add a new dataset: Place in `examples/single_turn_ds/`, register in `__init__.py`, and follow notebook tutorials.
-- To add a new metric: Implement in `examples/metrics/`, register in `__init__.py`.
+  - `.env` controls API endpoints and model names. Common keys: `OPENAI_API_KEY`, `OPENAI_CHAT_COMPLETIONS_URL` (or `OPENAI_BASE_URL`), `ANNOTATION_MODEL`, `ANNOTATION_TOKENIZER`, `JUDGE_API_URL`, `OUTPUT_DIR`.
+  - Use a Python venv/conda matching `pyproject.toml` / `collabllm/requirements.txt`. README notes Python >= 3.13.
 
-## Troubleshooting
+- Project conventions you must follow in code changes:
 
-- If annotation fails to extract JSON, lower model temperature or strengthen prompt constraints.
-- If judge model returns non-JSON, check API output and adjust prompt/stop tokens.
-- For IKT metric calculation, see README for numerator/denominator details.
+  - Outputs: generation → `multi_dialogue_topic_<topic_id>.json`; annotation → one JSON object per line in `.jsonl` with added `annotations` field.
+  - Prompts and output formats are strict: `annotation.py` expects a JSON array per prompt; `subjective_eval.py` expects pure JSON from the judge model. If changing prompts, update parsing fallbacks too.
+  - Resumable jobs: `annotation.py` and other batch scripts check existing outputs and resume—preserve file naming and line order when modifying behavior.
 
-## References
+- Integration notes:
 
-- See `collabllm/README.md` and `scripts/benchmark/README.md` for detailed workflow and format specs.
-- `.env` template is required for all scripts—fill in real values before running.
+  - Generation and evaluation use OpenAI-compatible HTTP; calls use `requests` wrappers — do not assume `openai` SDK only.
+  - Annotation uses local `vllm` (GPU recommended) + HuggingFace tokenizer paths; heavy GPU resources expected for annotation.
+  - Judge model is an HTTP service (`JUDGE_API_URL`) - adjust `stop` tokens and temperature in prompts to keep responses JSON.
 
----
+- Where to add data-cleaning utilities:
+
+  - For reusable helpers (importable): `collabllm/datasets/cleaning.py` or `collabllm/utils/cleaning.py`.
+  - For an executable pipeline step: `scripts/engine/clean_data.py` (matches existing `build_dataset.py` placement).
+
+- Quick commands (examples):
+  - Generate dialogues: `python scripts/benchmark/multi_dialogue.py` (ensure `.env` set)
+  - Annotate: `python scripts/benchmark/annotation.py --input-dir datasets/raw --output-dir datasets/annotated`
+  - Objective eval: `python scripts/benchmark/objective_eval.py datasets/annotated/*.jsonl --summary-file outputs/_overall_summary_metrics.json`
+
+If anything here is unclear or you want deeper examples (prompt text, metric lines, or a cleaning script template), tell me which part to expand.
+```
 
 **Feedback:** Please review and suggest improvements or clarify any unclear sections. This guide will be iterated for completeness and accuracy.

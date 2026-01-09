@@ -1,14 +1,28 @@
 [project]
-name = "graduation-project"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "datasets>=4.4.2",
-    "dotenv>=0.9.9",
-    "ipykernel>=7.1.0",
-    "json-repair>=0.54.3",
-    "jsonlines>=4.0.0",
-    "openai>=2.14.0",
+    dependencies=[
+        "datasets>=4.4.2",
+        "dotenv>=0.9.9",
+        "ipykernel>=7.1.0",
+        "json-repair>=0.54.3",
+        "jsonlines>=4.0.0",
+        "litellm>=1.80.13",
+        "openai>=2.14.0",
 ]
+    description="Add your description here"
+    name="graduation-project"
+    readme="README.md"
+    requires-python=">=3.13"
+    version="0.1.0"
+
+
+[build-system]
+    build-backend="setuptools.build_meta"
+    requires     =["setuptools>=61.0", "wheel"]
+
+# Restrict automatic package discovery to the actual Python package(s) to
+# avoid accidental inclusion of top-level folders such as `data/` or
+# `notebooks/` which triggered the error.
+[tool.setuptools.packages.find]
+    exclude=["data*", "notebooks*"]
+    include=["collabllm*"]
+    where  =["."]
