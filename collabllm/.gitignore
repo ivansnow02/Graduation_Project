@@ -1,8 +1,0 @@
-__pycache__
-outputs
-wandb
-.env
-*egg-info
-dist
-
-unsloth_compiled_cache
