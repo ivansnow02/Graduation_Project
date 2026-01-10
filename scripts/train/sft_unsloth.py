@@ -70,7 +70,7 @@ def main() -> None:
     callbacks = []
     if args.use_swanlab and SWANLAB_INSTALLED:
         swanlab_callback = SwanLabCallback(
-            project="sid-qwen3-sft",
+            project="sid-qwen3-14b-sft",
             run_name=args.output_dir.split("/")[-1]
         )
         callbacks.append(swanlab_callback)
@@ -128,6 +128,7 @@ def main() -> None:
     # --- 6. 配置 Trainer ---
     training_args = SFTConfig(
         output_dir=args.output_dir,
+        max_seq_length=args.max_seq_length,
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -178,3 +179,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# 确保在项目根目录下
+

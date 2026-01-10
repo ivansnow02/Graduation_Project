@@ -1,17 +1,22 @@
 [project]
     dependencies=[
-        "datasets>=4.4.2",
+        "datasets",
         "dotenv>=0.9.9",
         "ipykernel>=7.1.0",
         "json-repair>=0.54.3",
         "jsonlines>=4.0.0",
         "litellm>=1.80.13",
         "openai>=2.14.0",
+        "swanlab>=0.7.6",
+        "torch>=2.9.1",
+        "transformers>=4.57.3",
+        "unsloth>=2026.1.2",
+        "xformers>=0.0.33.post2",
 ]
     description="Add your description here"
     name="graduation-project"
     readme="README.md"
-    requires-python=">=3.13"
+    requires-python=">=3.10, <3.13"
     version="0.1.0"
 
 
@@ -26,3 +31,4 @@
     exclude=["data*", "notebooks*"]
     include=["collabllm*"]
     where  =["."]
+# set default index to utsc
