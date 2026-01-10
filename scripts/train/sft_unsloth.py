@@ -19,12 +19,6 @@ from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 
 
-# 尝试导入可选库
-try:
-    import wandb
-    WANDB_INSTALLED = True
-except ImportError:
-    WANDB_INSTALLED = False
 
 try:
     from swanlab.integration.transformers import SwanLabCallback
@@ -81,8 +75,6 @@ def main() -> None:
         )
         callbacks.append(swanlab_callback)
 
-    if args.wandb_project and WANDB_INSTALLED:
-        wandb.init(project=args.wandb_project, name=args.output_dir.split("/")[-1])
 
     # --- 2. 加载数据 ---
     print(f"Loading dataset from {args.dataset_repo}...")
@@ -147,7 +139,7 @@ def main() -> None:
         optim="adamw_8bit",
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
-        report_to="wandb" if (args.wandb_project and WANDB_INSTALLED) else "none",
+        report_to="none",
         save_strategy="steps",
         save_steps=500,
         dataset_text_field="text",

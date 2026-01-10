@@ -5,8 +5,6 @@ import os
 import logging
 from tqdm import tqdm
 import re
-import queue
-from concurrent.futures import ThreadPoolExecutor
 from typing import Generator, List, Optional, Set
 
 from collabllm.datasets.types import TeachingSession
@@ -66,7 +64,6 @@ class DataCleaner:
             logger.error("input_path does not exist: %s", self.input_path)
             return
 
-        # Collect files to process (support single file or recursive dir walk)
         if os.path.isfile(self.input_path):
             files: list[str] = [self.input_path]
         else:
@@ -211,7 +208,7 @@ class DataCleaner:
 
             # --- 针对学生的检查 (防止数据本身质量低) ---
             elif role_lower in ["学生", "student"]:
-                # 如果学生说的话太长（超过 800 字），可能是 GPT 生成的假数据
+                # 如果学生说的话太长（超过 800 字）
                 if len(content) > 800:
                     return False, "student_too_verbose"
 
@@ -219,74 +216,54 @@ class DataCleaner:
 
     def calculate_score(self, session: TeachingSession) -> float:
         """
-        基于 SID 论文 Table 8 的加权公式计算对话质量分数。
-        TotalScore = 0.15*SD + 0.10*SV + 0.15*IKT + 0.15*BP + 0.15*SC + 0.10*L3GR + 0.20*3C
+        基于单轮评分 + 全局指标计算会话质量评分 (混合评分方案)。
+
+        评分体系：
+        - 前5个指标 (SD, SV, IKT, SC, L3GR, 权重 0.65) 通过单轮分数求均值
+        - 后2个指标 (BP, 3C, 权重 0.35) 在全局层面计算
+
+        公式：
+        TotalScore = 0.65 * avg(turn_scores) + 0.35 * (0.15*BP + 0.20*3C) / 0.35
+                   = 0.65 * avg(turn_scores) + (0.15*BP + 0.20*3C) / (0.15 + 0.20)
+                   = 0.65 * avg(turn_scores) + (3/7)*BP + (4/7)*3C
         """
         if not session.annotations:
             return 0.0
 
-        # --- 1. 基础数据统计 ---
-        teacher_turns = 0
-        strategies_used: List[str] = []
-        unique_strategies: Set[str] = set()
-        l3_count = 0
-        transfer_count = 0
-        intents_covered: Set[str] = set()
+        # 第一步：为所有轮分配单轮分数
+        self.assign_turn_scores(session)
 
+        # 第二步：收集教师回复的单轮分数，计算前5个指标的贡献
+        teacher_turn_scores = []
+        for turn in session.dialogue:
+            if turn.is_teacher() and turn.score is not None:
+                teacher_turn_scores.append(turn.score)
+
+        if not teacher_turn_scores:
+            return 0.0
+
+        # 前5个指标的平均分 (SD, SV, IKT, SC, L3GR)
+        # 单轮分已包含基准分 0.35 和这5个指标的加权和
+        # 范围: [0.35, 1.0]
+        metric_12345_avg = sum(teacher_turn_scores) / len(teacher_turn_scores)
+
+        # 第三步：计算全局难以在单轮度量的两个指标 (BP, 3C)
         student_bloom_levels: List[int] = []
         errors_identified = 0
         errors_corrected = 0
-
-        # 用于 3C (Cognitive Correction) 计算的状态追踪
         last_student_state_was_error = False
 
         for ann in session.annotations:
-            # Annotation 是一个 dataclass，直接使用 getattr 访问属性
             role = getattr(ann, "speaker", "")
 
-            # --- 教师维度统计 ---
-            if role in ["教师", "Teacher", "assistant"]:
-                teacher_turns += 1
-
-                # 策略统计：使用规范化函数
-                strat = getattr(ann, "teaching_strategy", "")
-                if strat:
-                    strategies_used.append(strat)
-                    # 处理可能的逗号分隔 (e.g., "类比, 提示")
-                    for s in strat.replace("，", ",").split(","):
-                        s_clean = s.strip()
-                        if s_clean:
-                            # 规范化策略到标准 8 类之一
-                            canonical = canonicalize_teaching_strategy(s_clean)
-                            if canonical:
-                                unique_strategies.add(canonical)
-
-                # L3 引导 [cite: 1338]
-                guidance = getattr(ann, "teacher_guidance_level", "")
-                if "L3" in guidance:
-                    l3_count += 1
-
-                # 跨学科迁移 (IKT) [cite: 1148]
-                transfer = getattr(ann, "discipline_transfer", "")
-                if transfer in ["是", "Yes", True]:
-                    transfer_count += 1
-
-                # 意图覆盖 (SC)：使用规范化函数
-                intent = getattr(ann, "teacher_intent", "")
-                if intent:
-                    canonical_intent = canonicalize_teaching_intent(intent)
-                    if canonical_intent:
-                        intents_covered.add(canonical_intent)
-
-            # --- 学生维度统计 ---
-            elif role in ["学生", "Student", "user"]:
-                # Bloom 层级 (BP) [cite: 1147]：使用规范化函数
+            # BP (Bloom Progression) 需要学生认知层级数据
+            if role in ["学生", "Student", "user"]:
                 cog_level = getattr(ann, "cognitive_level", "")
                 level_score = normalize_cognitive_level(cog_level)
                 if level_score > 0:
                     student_bloom_levels.append(level_score)
 
-                # 认知状态 (3C 计算)
+                # 3C (Cognitive Correction) 需要认知状态追踪
                 state = getattr(ann, "student_cognition_state", "")
                 is_error = any(
                     x in state
@@ -303,74 +280,24 @@ class DataCleaner:
 
                 last_student_state_was_error = is_error
 
-        if teacher_turns == 0:
-            return 0.0
-
-        # --- 2. 指标计算 ---
-
-        # (1) SD: Strategy Density
-        # 公式: Number of teacher utterances with strategies / Total teacher utterances
-        metric_sd = len(strategies_used) / teacher_turns if teacher_turns else 0
-        metric_sd = min(metric_sd, 1.0)  # Cap at 1.0
-
-        # (2) SV: Strategy Variety
-        # 公式: Unique strategies used / 8
-        metric_sv = len(unique_strategies) / 8.0
-        metric_sv = min(metric_sv, 1.0)
-
-        # (3) IKT: Interdisciplinary Knowledge Transfer
-        # 公式: Transfer counts / Total teacher turns (Paper says counts, but likely meant rate or normalized)
-        # 这里为了归一化，我们假设如果 20% 的轮次包含跨学科就是满分 (根据 Table 2 的平均数据推测)
-        metric_ikt = (transfer_count / teacher_turns) / 0.2
-        metric_ikt = min(metric_ikt, 1.0)
-
         # (4) BP: Bloom Progression
-        # 公式: (Max - Min) / 5
         if student_bloom_levels:
             metric_bp = (max(student_bloom_levels) - min(student_bloom_levels)) / 5.0
         else:
             metric_bp = 0.0
         metric_bp = max(0.0, min(metric_bp, 1.0))
 
-        # (5) SC: Structure Completeness
-        # 公式: Covered intents / 4
-        # 现在 intents_covered 包含规范化的 4 大类: introduce, check_understanding, guide_reasoning, summarize_enhance
-        covered_count = 0
-        if "introduce" in intents_covered:
-            covered_count += 1
-        if "check_understanding" in intents_covered:
-            covered_count += 1
-        if "guide_reasoning" in intents_covered:
-            covered_count += 1
-        if "summarize_enhance" in intents_covered:
-            covered_count += 1
-        metric_sc = covered_count / 4.0
-
-        # (6) L3 GR: L3 Guidance Rate
-        # 公式: L3 counts / Total teacher turns
-        metric_l3gr = l3_count / teacher_turns
-
-        # (7) 3C: Cognitive Correction Count (Rate)
-        # 公式: Successful correction / Total error count
+        # (7) 3C: Cognitive Correction
         if errors_identified > 0:
             metric_3c = errors_corrected / errors_identified
         else:
-            # 如果没有错误发生，给予一个基准分 (因为没有错误也是一种顺利)
-            # 或者设置为 0，视你的筛选偏好而定。SID 论文中几乎所有模型这一项都很高
             metric_3c = 0.8
 
-        # --- 3. 加权汇总 ---
-        # TotalScore = 0.15*SD + 0.10*SV + 0.15*IKT + 0.15*BP + 0.15*SC + 0.10*L3GR + 0.20*3C
-
-        final_score = (
-            0.15 * metric_sd
-            + 0.10 * metric_sv
-            + 0.15 * metric_ikt
-            + 0.15 * metric_bp
-            + 0.15 * metric_sc
-            + 0.10 * metric_l3gr
-            + 0.20 * metric_3c
-        )
+        # 第四步：加权汇总
+        # 前5个指标贡献权重: 0.65
+        # 后2个指标权重: BP 0.15, 3C 0.20 (归一化为 0.35)
+        # 最终公式: 0.65 * metric_12345_avg + 0.15 * metric_bp + 0.20 * metric_3c
+        final_score = 0.65 * metric_12345_avg + 0.15 * metric_bp + 0.20 * metric_3c
 
         return round(final_score, 4)
 
@@ -511,8 +438,18 @@ class DataCleaner:
                     self.stats[reason] += 1
                     continue
 
-                # 3. 质量评分
+                # 2.5 清洗标注：移除不完整的注释
+                removed = session.clean_empty_annotations()
+                if not session.annotations:
+                    self.stats["empty_annotations_after_cleaning"] += 1
+                    continue
+
+                # 3. 质量评分 (Session-level score)
+                # calculate_score() 内部会先调用 assign_turn_scores() 设置单轮分数
+                # 然后基于单轮分数的聚合 + 全局的 BP 和 3C 指标计算会话分数
                 session.quality_score = self.calculate_score(session)
+                # 注意：此时 session.dialogue[i].score 已被设置并可用于序列化
+
                 self.valid_sessions.append(session)
 
             except Exception as e:
@@ -535,6 +472,96 @@ class DataCleaner:
 
         self.save_data(final_data)
         self.print_report(total, len(final_data))
+
+    def assign_turn_scores(self, session: TeachingSession):
+        """
+        根据标注信息为每一轮教师回复分配即时分数 (Mimic session level calculate_score).
+
+        基于指标模型权重:
+        - SD (0.15): 策略密度 (该轮是否使用策略)
+        - SV (0.10): 策略多样性 (该轮涉及多少种独特策略)
+        - IKT (0.15): 是否存在跨学科迁移
+        - SC (0.15): 教学结构完整性 (该轮涉及多少种教学意图)
+        - L3GR (0.10): 是否为 L3 级高阶引导
+        - 基准分 (0.35): 代替难以局部度量的 BP(0.15) 和 3C(0.20) 指标，确保通过清洗的教师回复有基础回馈
+        """
+        if not session.annotations:
+            return
+
+        def normalize_text(text: str) -> str:
+            if not text:
+                return ""
+            # 只保留中文字符、字母和数字，用于鲁棒匹配
+            return re.sub(r"[^\u4e00-\u9fa5a-zA-Z0-9]", "", text)
+
+        # 创建一个 归一化内容 -> 标注 的映射
+        norm_to_ann = {}
+        for ann in session.annotations:
+            if ann.utterance:
+                norm_key = normalize_text(ann.utterance)
+                if norm_key:  # 避免空键干扰
+                    norm_to_ann[norm_key] = ann
+
+        for turn in session.dialogue:
+            if turn.is_teacher():
+                # 尝试找到对应的标注
+                norm_key = normalize_text(turn.content)
+                ann = norm_to_ann.get(norm_key)
+
+                if ann:
+                    # 1. 提取策略指标 (SD & SV)
+                    strat = getattr(ann, "teaching_strategy", "")
+                    unique_strats = set()
+                    if strat:
+                        for s in strat.replace("，", ",").split(","):
+                            s_clean = s.strip()
+                            if s_clean:
+                                canonical = canonicalize_teaching_strategy(s_clean)
+                                if canonical:
+                                    unique_strats.add(canonical)
+
+                    metric_sd = 1.0 if unique_strats else 0.0
+                    metric_sv = min(len(unique_strats) / 8.0, 1.0)
+
+                    # 2. 跨学科指标 (IKT)
+                    transfer = getattr(ann, "discipline_transfer", "")
+                    metric_ikt = 1.0 if transfer in ["是", "Yes", True] else 0.0
+
+                    # 3. 意图指标 (SC)
+                    intent = getattr(ann, "teacher_intent", "")
+                    intents_covered = set()
+                    if intent:
+                        for i_raw in intent.replace("，", ",").split(","):
+                            i_clean = i_raw.strip()
+                            if i_clean:
+                                canonical_intent = canonicalize_teaching_intent(i_clean)
+                                if canonical_intent:
+                                    intents_covered.add(canonical_intent)
+                    metric_sc = min(len(intents_covered) / 4.0, 1.0)
+
+                    # 4. 引导等级 (L3GR)
+                    guidance = getattr(ann, "teacher_guidance_level", "")
+                    metric_l3gr = 1.0 if "L3" in guidance else 0.0
+
+                    # 5. 加权汇总
+                    # 权重分配参考 calculate_score: 0.15, 0.10, 0.15, 0.15, 0.10
+                    weighted_sum = (
+                        0.15 * metric_sd
+                        + 0.10 * metric_sv
+                        + 0.15 * metric_ikt
+                        + 0.15 * metric_sc
+                        + 0.10 * metric_l3gr
+                    )
+
+                    # 最终得分为基准分 (0.35) + 加权分 (max 0.65)
+                    turn.score = round(0.35 + weighted_sum, 4)
+                else:
+                    # 如果老师的话没被标注，但通过了清洗，给一个保底分或 None
+                    # 这里选择给 None，表示没有明确的证据评分，聚合时会跳过
+                    turn.score = None
+            else:
+                # 学生回复不赋予教师即时分数
+                turn.score = None
 
     def save_data(self, data):
         logger.info(f"Saving to {self.output_path}...")

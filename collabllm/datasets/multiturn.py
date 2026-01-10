@@ -161,13 +161,18 @@ class MultiturnDataset:
             )  # type: ignore
             raw_list = [dict(r) for _, split in ds_dict.items() for r in split]
 
+        # Filter out None entries that might result from failed conversions
+        raw_list = [row for row in raw_list if row is not None]
+
         if not raw_list:
-            raise ValueError("Loaded dataset is empty.")
+            raise ValueError(
+                "Loaded dataset is empty (or contains only empty entries)."
+            )
 
         # 2) Detect nested structure: presence of "turns" key in first element
         if isinstance(raw_list[0], dict) and "turns" in raw_list[0]:
             self.data = self._flatten_nested(raw_list)
-        else:
+        elif isinstance(raw_list[0], dict):
             # Assume flat structure; validate required keys
             if not _REQUIRED.issubset(raw_list[0]):
                 missing = _REQUIRED - set(raw_list[0])
@@ -175,11 +180,17 @@ class MultiturnDataset:
 
             # Auto-fill turn_id if missing
             for row in raw_list:
-                if not isinstance(row["prompt"], Sequence):
-                    raise TypeError("`prompt` must be a list of messages.")
+                if not isinstance(row.get("prompt"), Sequence):
+                    raise TypeError(
+                        f"Row {row.get('conv_id')} `prompt` must be a list of messages. Got: {type(row.get('prompt'))}"
+                    )
                 row.setdefault("turn_id", len(row["prompt"]))
 
             self.data = raw_list  # type: ignore
+        else:
+            raise TypeError(
+                f"Unknown data type in raw_list: {type(raw_list[0])}. Expected dict."
+            )
 
         if not self.data:
             raise ValueError("No valid rows after processing input.")
@@ -302,7 +313,6 @@ class MultiturnDataset:
         lower_bound_metric: Optional[str] = None,
         lower_bound: Optional[float] = 0.0,
     ) -> DatasetDict:
-
         # Select best example per conversation ID: prefer latest turn, then highest score
         best_examples = {}
         for row in self.data:
@@ -368,7 +378,6 @@ class MultiturnDataset:
         n_eval: Optional[int] = None,
         eval_ratio: Optional[float] = 0.0,
     ) -> DatasetDict:
-
         # Group rows by (conv_id, turn_id)
         grouped: Dict[tuple, List[Dict[str, Any]]] = {}
         for r in self.data:
@@ -413,7 +422,6 @@ class MultiturnDataset:
         n_eval: Optional[int] = None,
         eval_ratio: Optional[float] = 0.0,
     ) -> DatasetDict:
-
         # Keep exactly one row per (conv_id, turn_id)
         unique: Dict[tuple, Dict[str, Any]] = {}
         for r in self.data:

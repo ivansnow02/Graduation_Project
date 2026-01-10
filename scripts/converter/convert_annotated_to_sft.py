@@ -1,127 +1,238 @@
 #!/usr/bin/env python3
 """
-将 ../datasets/annotated 下的所有 .jsonl 文件合并并转换为 CollabLLM SFT 格式的脚本。
+将清洗后的 TeachingSession 数据转换为 CollabLLM 标准格式的脚本。
+
+支持多种输入格式和输出格式：
+  - 输入: JSON/JSONL 文件（包含 TeachingSession 数据）或已清洗的对象列表
+  - 输出: CollabLLM 嵌套格式（用于 MultiturnDataset）或扁平格式
 
 用法示例：
-python3 scripts/convert_annotated_to_sft.py \
-    --root_dir ../datasets/annotated \
-    --output_path ../datasets/sid_collabllm/sid_collabllm_sft.json
+  # 转换为嵌套格式（推荐）
+  python3 scripts/converter/convert_annotated_to_sft.py \
+      --input_dir data/cleaned \
+      --output_path data/collabllm/nested.json \
+      --format nested
+
+  # 转换为扁平格式
+  python3 scripts/converter/convert_annotated_to_sft.py \
+      --input_file data/cleaned.jsonl \
+      --output_path data/collabllm/flat.jsonl \
+      --format flat
+
+  # 进行聚合（多个回复合并）
+  python3 scripts/converter/convert_annotated_to_sft.py \
+      --input_dir data/cleaned \
+      --output_path data/collabllm/aggregated.json \
+      --format nested_agg
 """
 
 import argparse
-import hashlib
 import json
+import logging
 import os
+import sys
+from pathlib import Path
+from typing import List, Dict, Any
 
-try:
-    import jsonlines
-except Exception:
-    raise SystemExit("需要安装 jsonlines：pip install jsonlines")
+# 添加项目路径
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from collabllm.datasets.types import TeachingSession
+from collabllm.datasets.converter import (
+    convert_sessions_to_nested,
+    convert_sessions_to_flat,
+    convert_sessions_to_nested_with_aggregation,
+)
 
-def get_content_hash(messages):
-    """计算消息列表的 MD5 哈希指纹，截取前 8 位。"""
-    serialized = json.dumps(messages, sort_keys=True, ensure_ascii=False)
-    return hashlib.md5(serialized.encode("utf-8")).hexdigest()[:8]
-
-
-def load_all_jsonl(root_dir):
-    sid_data = []
-    if not os.path.isdir(root_dir):
-        raise FileNotFoundError(f"root_dir 不存在: {root_dir}")
-
-    for subdir, _, files in os.walk(root_dir):
-        for fname in files:
-            if not fname.endswith(".jsonl"):
-                continue
-            file_path = os.path.join(subdir, fname)
-            print(f"Processing: {file_path}")
-            try:
-                with jsonlines.open(file_path, "r") as reader:
-                    for obj in reader:
-                        sid_data.append(obj)
-            except Exception as e:
-                print(f"Warning: 读取 {file_path} 时出错: {e}")
-    return sid_data
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
-def convert_sid_to_collab(sid_data):
-    collab_data = []
+# ============================================================================
+# 数据加载
+# ============================================================================
 
-    for entry in sid_data:
-        dialogue = entry.get("dialogue", [])
-        base_id = entry.get("student_id", "unknown")
 
-        single_turn_prompt = dialogue[0]["content"] if dialogue else ""
-        metadata = {
-            "source": "SID",
-            "student_type": entry.get("student_type"),
-            "topic": entry.get("topic_text", ""),
-        }
+def load_teaching_sessions(path: str) -> List[TeachingSession]:
+    """
+    从 JSON/JSONL 文件加载 TeachingSession 对象。
 
-        history = []
-        seen_ids = set()
+    Args:
+        path: 文件路径（.json 或 .jsonl）或目录（递归查找所有 .json/.jsonl）
 
-        for i, turn in enumerate(dialogue):
-            role = "user" if turn.get("role") == "学生" else "assistant"
-            content = turn.get("content", "")
+    Returns:
+        TeachingSession 列表
+    """
+    sessions = []
 
-            if role == "assistant":
-                if history:
-                    prompt_hash = get_content_hash(history)
-                    unique_conv_id = f"{base_id}_turn_{i}_{prompt_hash}"
-                    if unique_conv_id in seen_ids:
-                        continue
-                    seen_ids.add(unique_conv_id)
+    if os.path.isfile(path):
+        files = [path]
+    elif os.path.isdir(path):
+        files = []
+        for root, _, filenames in os.walk(path):
+            for filename in filenames:
+                if filename.endswith((".json", ".jsonl")):
+                    files.append(os.path.join(root, filename))
+    else:
+        raise FileNotFoundError(f"Path not found: {path}")
 
-                    sample = {
-                        "conv_id": unique_conv_id,
-                        "single_turn_prompt": single_turn_prompt,
-                        "single_turn_completion": "",
-                        "single_turn_metadata": metadata,
-                        "turns": [
-                            {
-                                "prompt": list(history),
-                                "responses": [
-                                    {
-                                        "completion": content,
-                                        "score": 1.0,
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                    collab_data.append(sample)
+    for filepath in sorted(files):
+        logger.info(f"Loading: {filepath}")
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                if filepath.endswith(".json"):
+                    data = json.load(f)
+                    # 处理单个对象或列表
+                    if isinstance(data, dict):
+                        data = [data]
+                else:  # .jsonl
+                    data = []
+                    for line in f:
+                        if line.strip():
+                            data.append(json.loads(line))
 
-            history.append({"role": role, "content": content})
+            # 转换为 TeachingSession 对象
+            for raw_dict in data:
+                try:
+                    session = TeachingSession.from_dict(raw_dict)
+                    sessions.append(session)
+                except Exception as e:
+                    logger.error(f"Failed to parse TeachingSession: {e}")
+                    continue
 
-    return collab_data
+        except Exception as e:
+            logger.error(f"Failed to load {filepath}: {e}")
+            continue
+
+    logger.info(f"Loaded {len(sessions)} TeachingSession objects")
+    return sessions
+
+
+def save_json(data: Any, path: str) -> None:
+    """保存为 JSON 文件"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    logger.info(f"Saved to {path}")
+
+
+def save_jsonl(data: List[Dict[str, Any]], path: str) -> None:
+    """保存为 JSONL 文件"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for item in data:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+    logger.info(f"Saved {len(data)} items to {path}")
+
+
+# ============================================================================
+# 主程序
+# ============================================================================
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--root_dir",
-        default="../datasets/annotated",
-        help="annotated 文件夹路径（递归查找 .jsonl）",
+    parser = argparse.ArgumentParser(
+        description="Convert TeachingSession data to CollabLLM standard format"
     )
+
+    # 输入参数
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--input_file",
+        type=str,
+        help="Single JSON or JSONL file containing TeachingSession data",
+    )
+    input_group.add_argument(
+        "--input_dir",
+        type=str,
+        help="Directory containing JSON/JSONL files (recursive search)",
+    )
+
+    # 输出参数
     parser.add_argument(
         "--output_path",
-        default="../datasets/sid_collabllm/sid_collabllm_sft.json",
-        help="输出 JSON 文件路径",
+        type=str,
+        required=True,
+        help="Output file path (.json or .jsonl)",
     )
+
+    # 转换格式
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=["nested", "flat", "nested_agg"],
+        default="nested",
+        help=(
+            "Output format: "
+            "nested (recommended, for MultiturnDataset), "
+            "flat (flattened list), "
+            "nested_agg (nested with response aggregation)"
+        ),
+    )
+
+    # 其他选项
+    parser.add_argument(
+        "--use_quality_score",
+        action="store_true",
+        default=True,
+        help="Use TeachingSession.quality_score for response scores (default: True)",
+    )
+    parser.add_argument(
+        "--no_quality_score",
+        action="store_true",
+        help="Override: set all response scores to 1.0",
+    )
+
     args = parser.parse_args()
 
-    sid_data = load_all_jsonl(args.root_dir)
-    print(f"读取到 SID 条目: {len(sid_data)}")
+    # 确定输入路径
+    input_path = args.input_file or args.input_dir
 
-    collab_data = convert_sid_to_collab(sid_data)
-    os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
-    with open(args.output_path, "w", encoding="utf-8") as f:
-        json.dump(collab_data, f, ensure_ascii=False, indent=2)
+    # 加载数据
+    logger.info(f"Loading TeachingSession from {input_path}...")
+    sessions = load_teaching_sessions(input_path)
 
-    print(f"转换完成！生成 CollabLLM 训练样本数: {len(collab_data)}")
-    print(f"文件已保存至: {args.output_path}")
+    if not sessions:
+        logger.error("No sessions loaded, exiting")
+        return
+
+    # 决定是否使用质量分数
+    use_quality_score = args.use_quality_score and not args.no_quality_score
+
+    # 转换
+    logger.info(f"Converting {len(sessions)} sessions to {args.format} format...")
+
+    if args.format == "nested":
+        converted = convert_sessions_to_nested(
+            sessions,
+            use_quality_score=use_quality_score,
+        )
+        save_json(converted, args.output_path)
+
+    elif args.format == "flat":
+        converted = convert_sessions_to_flat(
+            sessions,
+            use_quality_score=use_quality_score,
+        )
+        # 保存为 JSONL
+        if args.output_path.endswith(".jsonl"):
+            save_jsonl(converted, args.output_path)
+        else:
+            # 如果是 .json，保存为数组
+            save_json(converted, args.output_path)
+
+    elif args.format == "nested_agg":
+        converted = convert_sessions_to_nested_with_aggregation(
+            sessions,
+            use_quality_score=use_quality_score,
+        )
+        save_json(converted, args.output_path)
+
+    logger.info("Conversion complete!")
 
 
 if __name__ == "__main__":
