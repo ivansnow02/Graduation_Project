@@ -1,4 +1,4 @@
-# CollabLLM: From Passive Responders to Active Collaborators  
+# CollabLLM: From Passive Responders to Active Collaborators
 
 <div align="left">
 
@@ -43,17 +43,17 @@ You may install additional packages (e.g., `pip install bigcodebench matplotlib`
 
 - Lightweight usage: Compute Multiturn-aware Rewards (MRs) for any model responses and construct datasets following `notebook_tutorials/`.
 - Synthetic data generation: Generating high-quality synthetic conversational data following `scripts/engine/build_dataset.py`. (Include your API keys in `.env` file)
-- Train CollabLLM: Conduct SFT/DPO models training to maximize MRs following examples under `scripts/train/*.py`. 
+- Train CollabLLM: Conduct SFT/DPO models training to maximize MRs following examples under `scripts/train/*.py`.
 
 
 ## Add Your Own Task
 
 To apply CollabLLM to a new task:
 
-1. **Add a Dataset:**  
+1. **Add a Dataset:**
    Place your single-turn dataset in `examples/single_turn_ds/` and register it in `__init__.py`.
 
-2. **(Optional) Add Metrics:**  
+2. **(Optional) Add Metrics:**
    Add new metrics to `examples/metrics/` and register them in `__init__.py`.
 
 You can now run data generation, reward computation, and model training using your customized setup.
@@ -65,10 +65,22 @@ If you find our work useful in your research, please cite the following:
 ```bibtex
 @inproceedings{collabllm2025,
     title={CollabLLM: From Passive Responders to Active Collaborators},
-    author={Shirley Wu and Michel Galley and Baolin Peng and Hao Cheng and 
-            Gavin Li and Yao Dou and Weixin Cai and James Zou and 
+    author={Shirley Wu and Michel Galley and Baolin Peng and Hao Cheng and
+            Gavin Li and Yao Dou and Weixin Cai and James Zou and
             Jure Leskovec and Jianfeng Gao},
     booktitle={International Conference on Machine Learning (ICML)},
     year={2025}
 }
+```
+
+
+
+
+```shell
+vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit --enable-lora --lora-modules r1-sft=outputs/sid_qwen14b_sft_full
+
+vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
+ --enable-lora \
+ --lora-modules teacher_model=outputs/sid_qwen14b_sft_full \
+ --port 8000 > run/log_teacher.txt 2>&1
 ```

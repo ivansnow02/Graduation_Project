@@ -3,326 +3,315 @@ import multiprocessing
 import os
 import random
 import time
+import logging
+import re
 from pathlib import Path
-
-import requests
-from openai import OpenAI
 import dotenv
 
+# 引入 litellm
+import litellm
+from litellm import completion
+from litellm.exceptions import RateLimitError, APIConnectionError
+
+# === 新增：引入进度条库 ===
+from tqdm import tqdm
+
+# ===== 0. 全局配置与日志优化 =====
 dotenv.load_dotenv()
 
+# # 禁用 Litellm 的自动日志回调，解决 Pydantic 序列化警告刷屏问题
+# litellm.success_callback = []
+# litellm.failure_callback = []
+# litellm.callbacks = []
 
-def _join_url(base: str, path: str) -> str:
-    base = (base or "").rstrip("/")
-    path = (path or "").lstrip("/")
-    if not base:
-        return ""
-    return f"{base}/{path}"
-
-
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", "").strip()
-OUTPUT_FILE = (
-    os.path.join(OUTPUT_DIR, "dialogue.jsonl") if OUTPUT_DIR else "dialogue.jsonl"
+# 配置日志
+# 注意：为了防止日志打断进度条，我们将 StreamHandler (控制台输出) 移除，
+# 只保留 FileHandler (文件输出)。控制台进度由 tqdm 独占。
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        # logging.StreamHandler(),  <-- 注释掉这行，让控制台清爽一点
+        logging.FileHandler("generation.log", encoding='utf-8')
+    ]
 )
 
-# ===== 教师配置（LM Studio 本地） =====
-TEACHER_BASE_URL = os.getenv("TEACHER_BASE_URL", "").strip()
-TEACHER_API_KEY = os.getenv("TEACHER_API_KEY", "").strip()
-TEACHER_MODEL = os.getenv("TEACHER_MODEL", "gpt-4").strip()
-teacher_url = os.getenv("TEACHER_CHAT_COMPLETIONS_URL", "").strip()
-if not teacher_url and TEACHER_BASE_URL:
-    teacher_url = _join_url(TEACHER_BASE_URL, "v1/chat/completions")
+# 路径配置
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "outputs").strip()
+Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
-# ===== 学生配置（远程 API） =====
-STUDENT_OPENAI_API_KEY = os.getenv("STUDENT_OPENAI_API_KEY", "").strip()
-STUDENT_OPENAI_BASE_URL = os.getenv("STUDENT_OPENAI_BASE_URL", "").strip()
+
+# ===== 1. 核心 LLM 调用函数 (修改版) =====
+
+def get_clean_base_url(url_env_key):
+    """清洗 URL，确保格式正确"""
+    url = os.getenv(url_env_key, "").strip()
+    if not url: return None
+    if "/chat/completions" in url:
+        url = url.split("/chat/completions")[0]
+    return url.rstrip("/")
+
+# 教师配置
+TEACHER_API_KEY = os.getenv("TEACHER_API_KEY", "EMPTY").strip()
+TEACHER_MODEL = os.getenv("TEACHER_MODEL", "teacher_model").strip()
+TEACHER_API_BASE = get_clean_base_url("TEACHER_BASE_URL")
+
+# 学生配置
+STUDENT_API_KEY = os.getenv("STUDENT_OPENAI_API_KEY", "").strip()
 STUDENT_MODEL = os.getenv("STUDENT_MODEL", "gpt-4").strip()
-student_client = OpenAI(
-    base_url=STUDENT_OPENAI_BASE_URL or None, api_key=STUDENT_OPENAI_API_KEY or None
-)
-student_url = os.getenv("STUDENT_OPENAI_CHAT_COMPLETIONS_URL", "").strip()
-if not student_url and STUDENT_OPENAI_BASE_URL:
-    student_url = _join_url(STUDENT_OPENAI_BASE_URL, "v1/chat/completions")
-
-# 学生 API 请求头
-student_headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {student_client.api_key}",
-}
-
-# 教师 API 请求头
-teacher_headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {TEACHER_API_KEY}",
-}
+STUDENT_API_BASE = get_clean_base_url("STUDENT_OPENAI_BASE_URL")
 
 
-def call_api_segmented(
-    prompt,
-    url,
-    headers,
-    model="gpt-4",
-    temperature=0.7,
-    max_tokens=1000,
-    max_segments=6,
-):
-    """通用 API 调用函数"""
-    replies = []
-    continuation_prompt = "（请继续上一轮内容，继续输出，不要重复开头）"
-    for i in range(max_segments):
-        seg_prompt = prompt if i == 0 else prompt + "\n" + continuation_prompt
-        data = {
-            "model": model,
-            "messages": [{"role": "user", "content": seg_prompt}],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        try:
-            if not url:
-                raise RuntimeError(
-                    "Missing chat completions URL. Please configure .env."
-                )
-            if not headers.get("Authorization"):
-                raise RuntimeError("Missing API key. Please configure .env.")
-            response = requests.post(url, headers=headers, json=data)
-            if response.status_code == 200:
-                try:
-                    response_data = response.json()
-                    # 检查响应中是否有 choices 字段
-                    if "choices" not in response_data:
-                        print(
-                            f"API response missing 'choices' field. Full response: {response.text}"
-                        )
-                        print(f"Check model name: {model}")
-                        replies.append("[Call Failed]")
-                        break
+def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
+    """
+    统一调用函数
+    """
+    # URL 修正
+    if api_base and not api_base.endswith("/v1"):
+        api_base = f"{api_base.rstrip('/')}/v1"
 
-                    content = response_data["choices"][0]["message"]["content"].strip()
+    # 模型名修正
+    clean_model_name = model.replace("openai/", "")
 
-                    if len(content) >= max_tokens:
-                        split_index = max(content.rfind("。"), content.rfind("？"))
-                        if split_index != -1:
-                            content = content[: split_index + 1]
-                    replies.append(content)
-                    if "[结束]" in content or len(content) < int(max_tokens * 0.8):
-                        break
-                except (KeyError, IndexError, ValueError) as json_err:
-                    print(f"Error parsing API response: {json_err}")
-                    print(f"Full response: {response.text}")
-                    replies.append("[Call Failed]")
-                    break
-            else:
-                print(f"API call failed, status code:{response.status_code}")
-                print(f"Response: {response.text}")
-                replies.append("[Call Failed]")
-                break
-        except Exception as e:
-            print(f"The call failed with the error message: {e}")
-            replies.append("[Call Failed]")
-            break
-    return "\n".join(replies)
+    try:
+        response = completion(
+            model=clean_model_name,
+            messages=messages,
+            api_base=api_base,
+            api_key=api_key,
+            custom_llm_provider="openai", # 强制走 OpenAI 协议
+            temperature=temperature,
+            max_tokens=4096, # 留足空间
+            drop_params=True,
+            num_retries=3,
+            # === 关键修改：尝试通过参数禁用思考 ===
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}}
+        )
+
+        raw_content = response.choices[0].message.content or ""
+        return raw_content
+
+    except RateLimitError:
+        logging.warning(f"Rate Limit Hit for {clean_model_name}. Sleeping...")
+        time.sleep(5)
+        return "[RateLimit]"
+    except Exception as e:
+        logging.error(f"Litellm Error ({clean_model_name}): {str(e)}")
+        return None
 
 
-def call_gpt_segmented(
-    prompt, model=None, temperature=0.7, max_tokens=1000, max_segments=6
-):
-    """教师 API 调用"""
-    if model is None:
-        model = TEACHER_MODEL
-    return call_api_segmented(
-        prompt,
-        teacher_url,
-        teacher_headers,
-        model,
-        temperature,
-        max_tokens,
-        max_segments,
-    )
-
+# ===== 2. 业务逻辑 (Prompt) =====
 
 def generate_initial_student_question(topic_text):
     prompt = f"""
 你是一名中学生，正在学习一节跨学科课程。请根据下面的课程内容，提出一个你真正感到困惑或好奇的问题。
-你的输出中只能包含一个清晰的问题，不得包含多个问句或并列问题。
+要求：
+1. 只需要输出问题本身，不要输出“学生：”或任何前缀。
+2. 问题要具体，不要太宽泛。
+
 课程内容如下：
 {topic_text}
 """
-    result = call_gpt_segmented(prompt)
-    result = result.strip().replace("学生：", "").replace("老师：", "").strip()
-    return result.split("？")[0].strip() + "？" if "？" in result else result
+    return call_llm(
+        [{"role": "user", "content": prompt}],
+        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+    )
 
-
-def generate_teacher_response(history_text):
+def generate_teacher_response(history):
+    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
     prompt = f"""
-你是一位跨学科的教师，始终使用苏格拉底式提问法来引导学生。你的目标不是直接给出答案，而是通过逐轮递进、循序渐进的问题，引导学生独立思考并构建跨学科理解。
-你的行为规范如下：
-每一轮只能提出一个简洁的问题；必须体现认知推进；不能重复提问；禁止多个并列问题。
-你应从学生上一次回答中提炼关键点，沿着一个核心问题主线继续深入。
-你应始终鼓励学生跨学科思考（生物、地理、物理、历史等）。
-当你判断学生理解已经完成，请生成一句简洁明了的总结，明确指出学生已经完成推理，并标注[结束]。
-以下是对话历史：
+你是一位跨学科的教师，始终使用苏格拉底式提问法来引导学生。
+目标：通过逐轮递进的问题，引导学生独立思考。
+
+规范：
+1. 每一轮只能提出**一个**简洁的问题。
+2. 基于学生的回答提炼关键点，推进思考。
+3. 鼓励跨学科思考（生物、地理、物理、历史等）。
+4. 不要直接给答案，除非学生完全卡住需要提供脚手架。
+5. 当判断教学目标达成时，请输出一句简短总结，并**严格以字符串 [结束] 结尾**。
+
+对话历史：
 {history_text}
-教师：
+
+请输出教师的回答：
 """
-    result = call_gpt_segmented(prompt)
-    result = result.strip().replace("教师：", "").strip()
-    return result.split("？")[0].strip() + "？" if "？" in result else result
+    return call_llm(
+        [{"role": "user", "content": prompt}],
+        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+    )
 
-
-def generate_student_response(history, max_retries=3, temperature=0.5):
+def generate_student_response(history):
     student_types = {
         "全优型": "你是一位全优型学生，逻辑清晰，善于跨学科推理。",
-        "知识掌握不足": "你是一位基础薄弱的学生，对概念掌握不牢。",
-        "学习渴望低": "你是一位兴趣不高的学生，对问题有些迷茫但愿意尝试。请用简短、真实的语言回应老师的问题。",
+        "知识掌握不足": "你是一位基础薄弱的学生，对概念掌握不牢，经常需要老师解释基础词汇。",
+        "学习渴望低": "你是一位兴趣不高的学生，回答简短，偶尔会表现出不耐烦。",
     }
     scenarios = [
         "（1）学生不理解问题的含义",
-        "（2）学生不理解教师讲解的内容",
-        "（3）学生计算错误",
-        "（4）某学生知识掌握较差",
-        "（5）学生求知欲弱",
-        "（6）学生各方面能力都很强",
+        "（2）学生尝试回答但有部分错误",
+        "（3）学生进行了一个类比猜测",
+        "（4）学生完全不知道，请求提示",
+        "（5）学生回答正确并尝试延伸",
     ]
+
     identity, instruction = random.choice(list(student_types.items()))
     scenario = random.choice(scenarios)
-    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
-    prompt = f"""
-你是一名中学生，现在将模拟一次跨学科教学对话。请根据教师的问题给出简洁、直接的回答，避免过度推理，不进行深度思考，确保回答适合你的理解水平。
-学生身份：{identity}
-{instruction}
-当前情景：{scenario}
-以下是对话历史：
-{history_text}
-学生：
-"""
-    result = call_api_segmented(
-        prompt,
-        student_url,
-        student_headers,
-        model=STUDENT_MODEL,
-        temperature=temperature,
-    )
-    return result, identity, scenario
 
-
-def generate_summary_from_history(history):
     history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
+
     prompt = f"""
-你是一位跨学科教师，请根据以下对话历史，总结这段师生对话并根回答学生最初提出的问题。请用简洁自然的语言总结，注意不要过长，并以[结束]结尾。请确保总结是以教师的口吻对学生进行反馈，而非单纯的概括。
+你是一名中学生。请根据教师的问题给出回答。
+你的设定：{identity}
+当前状态：{scenario}
+
+要求：
+1. 回答要口语化，符合中学生身份。
+2. 只要输出回答内容，不要输出角色前缀。
+
 对话历史：
 {history_text}
-教师总结：
+
+请输出学生的回答：
 """
-    return call_gpt_segmented(prompt)
+    reply = call_llm(
+        [{"role": "user", "content": prompt}],
+        model=STUDENT_MODEL, api_base=STUDENT_API_BASE, api_key=STUDENT_API_KEY,
+        temperature=0.8
+    )
+    return reply, identity, scenario
 
+def generate_summary(history):
+    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
+    prompt = f"""
+请以教师的口吻，对以下师生对话进行简短的教学总结，并回答学生最初的问题。
+对话历史：
+{history_text}
+"""
+    return call_llm(
+        [{"role": "user", "content": prompt}],
+        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+    )
 
-def generate_full_dialogue(topic_text, student_id, min_turns=3):
-    print(f"\n Generating conversation for {student_id}...")
+def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     history = []
+
+    # 1. 学生提问
     question = generate_initial_student_question(topic_text)
-    print(f"Student (initial question): {question}")
+    if not question or "[RateLimit]" in question: return None
+
     history.append({"role": "学生", "content": question})
+    logging.info(f"[{student_id}] Question: {question[:30]}...")
+
     turns = 0
-    label_identity = ""
-    label_scenario = ""
-    while True:
+    final_identity = "Mixed"
+    final_scenario = "Mixed"
+
+    while turns < max_turns:
         turns += 1
-        print(f"Round {turns}")
-        history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
-        if turns > 5:
-            summary = generate_summary_from_history(history)
-            print(f"Teacher: {summary}")
-            history.append({"role": "教师", "content": summary})
-            break
-        teacher_reply = generate_teacher_response(history_text)
-        print(f"Teacher: {teacher_reply}")
+
+        # 2. 老师回复
+        teacher_reply = generate_teacher_response(history)
+        if not teacher_reply or "[RateLimit]" in teacher_reply: break
+
         history.append({"role": "教师", "content": teacher_reply})
-        if "[结束]" in teacher_reply and turns >= min_turns:
+
+        if "[结束]" in teacher_reply:
+            history[-1]["content"] = teacher_reply.replace("[结束]", "").strip()
             break
+
+        if turns >= max_turns:
+            summary = generate_summary(history)
+            if summary:
+                history.append({"role": "教师", "content": summary})
+            break
+
+        # 3. 学生回复
         student_reply, identity, scenario = generate_student_response(history)
-        print(f"Student: {student_reply}")
+        if not student_reply or "[RateLimit]" in student_reply: break
+
+        final_identity = identity
+        final_scenario = scenario
+
         history.append({"role": "学生", "content": student_reply})
-        if not label_identity:
-            label_identity = identity
-        if not label_scenario:
-            label_scenario = scenario
+
     return {
         "student_id": student_id,
-        "student_type": label_identity,
-        "scenario": label_scenario,
+        "student_type": final_identity,
+        "scenario": final_scenario,
         "dialogue": history,
     }
 
 
-def load_topics_from_json(json_path):
+# ===== 3. 多进程与文件写入 =====
+
+def worker_process_topic(args):
+    """
+    工作进程：处理单个 Topic，生成多个对话
+    """
+    topic_entry, topic_idx, base_output_dir = args
+    topic_text = topic_entry.get("topic", "")
+    topic_id = topic_entry.get("id", f"topic_{topic_idx + 1}")
+
+    output_file = os.path.join(base_output_dir, f"dialogue_{topic_id}.jsonl")
+
+    logging.info(f"Start processing Topic: {topic_id}")
+
+    NUM_STUDENTS = 5
+    REPEATS = 2
+
+    count = 0
+    for s_idx in range(NUM_STUDENTS):
+        student_id = f"Student_{s_idx + 1}"
+        for r_idx in range(REPEATS):
+            try:
+                dialogue_data = generate_full_dialogue(topic_text, student_id)
+
+                if dialogue_data:
+                    dialogue_data["topic_id"] = topic_id
+                    dialogue_data["topic_text_preview"] = topic_text[:50]
+                    dialogue_data["repeat_id"] = f"R{r_idx+1}"
+
+                    # === 实时写入 JSONL ===
+                    with open(output_file, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(dialogue_data, ensure_ascii=False) + "\n")
+
+                    count += 1
+            except Exception as e:
+                logging.error(f"Critical Error in worker {topic_id}: {e}")
+                time.sleep(1)
+
+    logging.info(f"Finished Topic: {topic_id}, Generated {count} dialogues.")
+    return topic_id
+
+def load_topics(json_path):
     with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
-def load_existing_outputs(output_path):
-    existing = set()
-    if os.path.exists(output_path):
-        with open(output_path, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    item = json.loads(line)
-                    key = f"{item['topic_id']}_{item['student_id']}_{item['repeat_id']}"
-                    existing.add(key)
-                except Exception:
-                    continue
-    return existing
-
-
-def append_dialogue(dialogue_entry, output_path):
-    with open(output_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(dialogue_entry, ensure_ascii=False) + "\n")
-
-
-def generate_single_topic_dialogues(args):
-    topic_entry, topic_idx, base_output_dir = args
-    topic_text = topic_entry["topic"]
-    topic_id = topic_entry.get("id", f"topic_{topic_idx + 1}")
-    output_file = os.path.join(base_output_dir, f"multi_dialogue_topic_{topic_id}.json")
-    topic_dialogues = []
-    for student_idx in range(20):
-        student_id = f"Student_{student_idx + 1}"
-        for repeat in range(2):
-            repeat_id = f"R{repeat + 1}"
-            try:
-                dialogue = generate_full_dialogue(
-                    topic_text, student_id=student_id, min_turns=5
-                )
-                dialogue["topic_id"] = topic_id
-                dialogue["topic_text"] = topic_text
-                dialogue["repeat_id"] = repeat_id
-                topic_dialogues.append(dialogue)
-                time.sleep(1)
-            except Exception as e:
-                print(f"Dialog generation failed: {e}")
-                continue
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(topic_dialogues, f, ensure_ascii=False, indent=2)
-    return topic_id
-
-
 if __name__ == "__main__":
     input_file = os.getenv("MULTI_DIALOGUE_INPUT_FILE", "").strip()
-    base_output_dir = os.getenv("OUTPUT_DIR", "").strip()
-    if not input_file:
-        raise RuntimeError(
-            "Please set MULTI_DIALOGUE_INPUT_FILE (topics json) in environment or edit multi_dialogue.py __main__."
-        )
-    if not base_output_dir:
-        raise RuntimeError(
-            "Please set OUTPUT_DIR (output directory) in environment or edit multi_dialogue.py __main__."
-        )
-    Path(base_output_dir).mkdir(parents=True, exist_ok=True)
-    topic_entries = load_topics_from_json(input_file)
-    total = len(topic_entries)
-    args_list = [(topic_entries[i], i, base_output_dir) for i in range(total)]
-    num_processes = min(10, multiprocessing.cpu_count())
-    with multiprocessing.Pool(processes=num_processes) as pool:
-        results = pool.map(generate_single_topic_dialogues, args_list)
-    print(
-        f"\n All topics have been processed, and a total of {len(results)} topic files have been generated."
-    )
+    if not input_file or not os.path.exists(input_file):
+        print("Error: MULTI_DIALOGUE_INPUT_FILE env var not set or file not found.")
+        exit(1)
+
+    topics = load_topics(input_file)
+
+    # 根据机器配置调整并发数
+    max_workers = min(16, multiprocessing.cpu_count())
+
+    print(f"Start generating with {max_workers} processes using LiteLLM...")
+
+    # 准备参数列表
+    args_list = [(t, i, OUTPUT_DIR) for i, t in enumerate(topics)]
+
+    # === 添加 TQDM 进度条 ===
+    with multiprocessing.Pool(processes=max_workers) as pool:
+        # 使用 tqdm 包裹迭代器，设置 total 让它知道总共有多少个任务
+        # unit='topic' 显示单位，desc 显示描述
+        results_iterator = pool.imap_unordered(worker_process_topic, args_list)
+
+        for res in tqdm(results_iterator, total=len(topics), desc="Generating Dialogues", unit="topic"):
+            # 这里可以选择打印 debug 信息，或者留空让进度条保持干净
+            # 详细日志建议去 generation.log 查看
+            pass
+
+    print("\nAll tasks finished.")
