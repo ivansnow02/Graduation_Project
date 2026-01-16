@@ -1,0 +1,382 @@
+[
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "IKT": {
+        "score": 0.125,
+        "display": "12.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.65375,
+        "display": "0.6538"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "IKT": {
+        "score": 0.625,
+        "display": "62.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.72875,
+        "display": "0.7288"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "IKT": {
+        "score": 0.125,
+        "display": "12.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.875,
+        "display": "87.50%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.6412500000000001,
+        "display": "0.6413"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.375,
+        "display": "37.50%"
+      },
+      "IKT": {
+        "score": 0.375,
+        "display": "37.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.75,
+        "display": "75.00%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.61625,
+        "display": "0.6162"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "IKT": {
+        "score": 0.375,
+        "display": "37.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.875,
+        "display": "87.50%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.61625,
+        "display": "0.6162"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "IKT": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.875,
+        "display": "87.50%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.66,
+        "display": "0.6600"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "IKT": {
+        "score": 0.75,
+        "display": "75.00%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.875,
+        "display": "87.50%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.71,
+        "display": "0.7100"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "IKT": {
+        "score": 0.75,
+        "display": "75.00%"
+      },
+      "BP": {
+        "raw_value": 4,
+        "score": 0.8,
+        "display": "80.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.7825,
+        "display": "0.7825"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.375,
+        "display": "37.50%"
+      },
+      "IKT": {
+        "score": 0.125,
+        "display": "12.50%"
+      },
+      "BP": {
+        "raw_value": 2,
+        "score": 0.4,
+        "display": "40.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.5,
+        "display": "50.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.6412500000000001,
+        "display": "0.6413"
+      }
+    }
+  },
+  {
+    "dialogue_id": null,
+    "metrics_results": {
+      "StrategyDensity": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "StrategyVariety": {
+        "score": 0.375,
+        "display": "37.50%"
+      },
+      "IKT": {
+        "score": 0.25,
+        "display": "25.00%"
+      },
+      "BP": {
+        "raw_value": 4,
+        "score": 0.8,
+        "display": "80.00%"
+      },
+      "StructureCompleteness": {
+        "score": 0.75,
+        "display": "75.00%"
+      },
+      "L3GuidanceRate": {
+        "score": 0.875,
+        "display": "87.50%"
+      },
+      "CognitiveCorrectionRate": {
+        "score": 1.0,
+        "display": "100.00%"
+      },
+      "TotalScore": {
+        "score": 0.7449999999999999,
+        "display": "0.7450"
+      }
+    }
+  }
+]
