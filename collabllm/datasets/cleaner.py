@@ -8,6 +8,7 @@ import re
 from typing import Generator, List, Optional, Set
 
 from collabllm.datasets.types import TeachingSession
+from collabllm.utils.metrics import calculate_session_metrics
 from collabllm.utils.clean import (
     canonicalize_teaching_intent,
     canonicalize_teaching_strategy,
@@ -90,11 +91,13 @@ class DataCleaner:
                         yield json.loads(raw)
                     except json.JSONDecodeError as e:
                         self.stats["json_errors"] += 1
-                        self.dropped_samples.append({
-                            "file": path,
-                            "line_no": lineno,
-                            "line": raw[:500],
-                        })
+                        self.dropped_samples.append(
+                            {
+                                "file": path,
+                                "line_no": lineno,
+                                "line": raw[:500],
+                            }
+                        )
                         logger.debug("JSON parse failed %s:%d: %s", path, lineno, e)
         except Exception as e:
             logger.exception("Failed to read %s: %s", path, e)
@@ -214,92 +217,43 @@ class DataCleaner:
 
         return True, "pass"
 
-    def calculate_score(self, session: TeachingSession) -> float:
+    def evaluate_session(self, session: TeachingSession) -> dict:
         """
-        基于单轮评分 + 全局指标计算会话质量评分 (混合评分方案)。
-
-        评分体系：
-        - 前5个指标 (SD, SV, IKT, SC, L3GR, 权重 0.65) 通过单轮分数求均值
-        - 后2个指标 (BP, 3C, 权重 0.35) 在全局层面计算
-
-        公式：
-        TotalScore = 0.65 * avg(turn_scores) + 0.35 * (0.15*BP + 0.20*3C) / 0.35
-                   = 0.65 * avg(turn_scores) + (0.15*BP + 0.20*3C) / (0.15 + 0.20)
-                   = 0.65 * avg(turn_scores) + (3/7)*BP + (4/7)*3C
+        Calculates full metrics for the session using the shared metrics utility.
+        Assists in both scoring and detailed filtering checks.
         """
         if not session.annotations:
-            return 0.0
+            return {"total_score": 0.0}
 
-        # 第一步：为所有轮分配单轮分数
+        # Ensure turn-level scores are assigned (if used for downstream RL/DPO)
         self.assign_turn_scores(session)
 
-        # 第二步：收集教师回复的单轮分数，计算前5个指标的贡献
-        teacher_turn_scores = []
-        for turn in session.dialogue:
-            if turn.is_teacher() and turn.score is not None:
-                teacher_turn_scores.append(turn.score)
+        # Calculate session-level metrics
+        return calculate_session_metrics(session)
 
-        if not teacher_turn_scores:
-            return 0.0
+    def _select_top_percentile(
+        self, sessions: List[TeachingSession], percentile: float = 0.35
+    ) -> List[TeachingSession]:
+        """
+        Select the top `percentile` fraction of sessions based on quality_score.
+        """
+        if not sessions:
+            return []
 
-        # 前5个指标的平均分 (SD, SV, IKT, SC, L3GR)
-        # 单轮分已包含基准分 0.35 和这5个指标的加权和
-        # 范围: [0.35, 1.0]
-        metric_12345_avg = sum(teacher_turn_scores) / len(teacher_turn_scores)
+        # Sort by score descending
+        sessions.sort(key=lambda s: s.quality_score, reverse=True)
 
-        # 第三步：计算全局难以在单轮度量的两个指标 (BP, 3C)
-        student_bloom_levels: List[int] = []
-        errors_identified = 0
-        errors_corrected = 0
-        last_student_state_was_error = False
+        count = int(len(sessions) * percentile)
+        # Ensure at least some minimum if data exists
+        count = max(count, min(len(sessions), 100))
 
-        for ann in session.annotations:
-            role = getattr(ann, "speaker", "")
+        logger.info(
+            f"Selecting top {percentile * 100:.1f}%: Keeping {count} / {len(sessions)} samples."
+        )
+        cutoff_score = sessions[count - 1].quality_score
+        logger.info(f"Cutoff Score: {cutoff_score:.4f}")
 
-            # BP (Bloom Progression) 需要学生认知层级数据
-            if role in ["学生", "Student", "user"]:
-                cog_level = getattr(ann, "cognitive_level", "")
-                level_score = normalize_cognitive_level(cog_level)
-                if level_score > 0:
-                    student_bloom_levels.append(level_score)
-
-                # 3C (Cognitive Correction) 需要认知状态追踪
-                state = getattr(ann, "student_cognition_state", "")
-                is_error = any(
-                    x in state
-                    for x in ["模糊", "错误", "Vague", "Incorrect", "Misconception"]
-                )
-                is_clear = any(
-                    x in state for x in ["清晰", "高阶", "Clear", "Higher-order"]
-                )
-
-                if last_student_state_was_error:
-                    errors_identified += 1
-                    if is_clear:
-                        errors_corrected += 1
-
-                last_student_state_was_error = is_error
-
-        # (4) BP: Bloom Progression
-        if student_bloom_levels:
-            metric_bp = (max(student_bloom_levels) - min(student_bloom_levels)) / 5.0
-        else:
-            metric_bp = 0.0
-        metric_bp = max(0.0, min(metric_bp, 1.0))
-
-        # (7) 3C: Cognitive Correction
-        if errors_identified > 0:
-            metric_3c = errors_corrected / errors_identified
-        else:
-            metric_3c = 0.8
-
-        # 第四步：加权汇总
-        # 前5个指标贡献权重: 0.65
-        # 后2个指标权重: BP 0.15, 3C 0.20 (归一化为 0.35)
-        # 最终公式: 0.65 * metric_12345_avg + 0.15 * metric_bp + 0.20 * metric_3c
-        final_score = 0.65 * metric_12345_avg + 0.15 * metric_bp + 0.20 * metric_3c
-
-        return round(final_score, 4)
+        return sessions[:count]
 
     def _select_balanced_samples(self, target_count: int) -> List[TeachingSession]:
         """
@@ -409,15 +363,19 @@ class DataCleaner:
 
     def run_pipeline(self) -> None:
         total = 0
+        metrics_stats = {
+            "low_ikt": 0,
+            "low_variety": 0,
+        }
 
         for raw_dict in tqdm(self.load_data(), desc="Cleaning", dynamic_ncols=True):
             total += 1
 
-            # 1. 核心转换：Dict -> Dataclass
+            # 1. Core Conversion: Dict -> Dataclass
             try:
                 session = TeachingSession.from_dict(raw_dict)
 
-                # 2. 规则过滤 (传对象进去)
+                # 2. Basic Rule Filtering
                 passed, reason = self.filter_format(session)
                 if not passed:
                     self.stats[reason] += 1
@@ -427,10 +385,12 @@ class DataCleaner:
                 if not passed:
                     self.stats[reason] += 1
                     if len(self.dropped_samples) < 3:
-                        self.dropped_samples.append({
-                            "reason": reason,
-                            "content": session.to_dict(),
-                        })
+                        self.dropped_samples.append(
+                            {
+                                "reason": reason,
+                                "content": session.to_dict(),
+                            }
+                        )
                     continue
 
                 passed, reason = self.filter_safety(session)
@@ -438,18 +398,30 @@ class DataCleaner:
                     self.stats[reason] += 1
                     continue
 
-                # 2.5 清洗标注：移除不完整的注释
+                # 2.5 Clean basic annotations
                 removed = session.clean_empty_annotations()
                 if not session.annotations:
                     self.stats["empty_annotations_after_cleaning"] += 1
                     continue
 
-                # 3. 质量评分 (Session-level score)
-                # calculate_score() 内部会先调用 assign_turn_scores() 设置单轮分数
-                # 然后基于单轮分数的聚合 + 全局的 BP 和 3C 指标计算会话分数
-                session.quality_score = self.calculate_score(session)
-                # 注意：此时 session.dialogue[i].score 已被设置并可用于序列化
+                # 3. Advanced Quality Scoring & Filtering
+                # Calculate full metrics
+                metrics = self.evaluate_session(session)
+                session.quality_score = metrics["total_score"]
 
+                # --- Hard Filter 1: Interdisciplinary Knowledge Transfer (IKT) > 0 ---
+                if metrics.get("ikt_score", 0) <= 0:
+                    self.stats["low_ikt"] += 1
+                    metrics_stats["low_ikt"] += 1
+                    continue
+
+                # --- Hard Filter 2: Strategy Variety >= 0.5 ---
+                if metrics.get("strategy_variety", 0) < 0.5:
+                    self.stats["low_strategy_variety"] += 1
+                    metrics_stats["low_variety"] += 1
+                    continue
+
+                # Passed all hard filters
                 self.valid_sessions.append(session)
 
             except Exception as e:
@@ -460,15 +432,30 @@ class DataCleaner:
         logger.info(
             f"Phase 1 Done. Cleaned samples: {len(self.valid_sessions)} / {total}"
         )
+        logger.info(
+            f"Advanced Constraints Drops: IKT={metrics_stats['low_ikt']}, Variety={metrics_stats['low_variety']}"
+        )
 
-        # 2. 排序与截断 (分组 + 多样性保证)
-        if self.top_n and len(self.valid_sessions) > self.top_n:
-            final_data = self._select_balanced_samples(self.top_n)
-        else:
+        # 4. Soft Filter: Top Percentile & Diversity Balance
+        # User Strategy: "Cherry-Picking" - Top 30%-40%
+
+        # Sort valid sessions by score descending first
+        self.valid_sessions.sort(key=lambda s: s.quality_score, reverse=True)
+
+        if self.top_n:
             logger.info(
-                "Phase 2: Keeping all cleaned samples (Count < Top N or Top N not set)."
+                f"Selecting Top {self.top_n} from {len(self.valid_sessions)} valid samples..."
             )
-            final_data = self.valid_sessions
+            if len(self.valid_sessions) > self.top_n:
+                # Use balanced sampler if we have enough data and need to cut
+                final_data = self._select_balanced_samples(self.top_n)
+            else:
+                final_data = self.valid_sessions
+        else:
+            # Fallback to percentile if no explicit N given
+            final_data = self._select_top_percentile(
+                self.valid_sessions, percentile=0.35
+            )
 
         self.save_data(final_data)
         self.print_report(total, len(final_data))
