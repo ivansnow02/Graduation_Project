@@ -119,9 +119,9 @@ def convert_session_to_nested(
         metadata.update(extra_metadata)
 
     # 2. 生成 conv_id
-    content_hash = get_content_hash([
-        {"role": d.role, "content": d.content} for d in session.dialogue
-    ])
+    content_hash = get_content_hash(
+        [{"role": d.role, "content": d.content} for d in session.dialogue]
+    )
     conv_id = (
         f"{session.topic_id}_{session.student_id}_{session.repeat_id}_{content_hash}"
     )
@@ -166,18 +166,22 @@ def convert_session_to_nested(
                 else:
                     score = 1.0
 
-                turns.append({
-                    "prompt": list(history),
-                    "responses": [
-                        {"completion": turn.content, "score": score},
-                    ],
-                })
+                turns.append(
+                    {
+                        "prompt": list(history),
+                        "responses": [
+                            {"completion": turn.content, "score": score},
+                        ],
+                    }
+                )
 
         # 将当前轮次加入历史（供后续轮次作为上下文）
-        history.append({
-            "role": normalized_role,
-            "content": turn.content,
-        })
+        history.append(
+            {
+                "role": normalized_role,
+                "content": turn.content,
+            }
+        )
 
     if not turns:
         logger.warning(f"Session {session.student_id} generated no turns, skipping")
@@ -259,15 +263,15 @@ def convert_session_to_flat(
     # 转换为扁平格式
     flat_data = []
     history = []
-    content_hash = get_content_hash([
-        {"role": d.role, "content": d.content} for d in session.dialogue
-    ])
+    content_hash = get_content_hash(
+        [{"role": d.role, "content": d.content} for d in session.dialogue]
+    )
 
     for turn_idx, turn in enumerate(session.dialogue):
         normalized_role = normalize_role(turn.role)
 
         if normalized_role == "assistant" and history:
-            conv_id = f"{session.topic_id}_{session.student_id}_{session.repeat_id}_{content_hash}_t{turn_idx}"
+            conv_id = f"{session.topic_id}_{session.student_id}_{session.repeat_id}_{content_hash}"
 
             # 使用单轮 score 或全局 quality_score
             if turn.score is not None:
@@ -277,21 +281,25 @@ def convert_session_to_flat(
             else:
                 score = 1.0
 
-            flat_data.append({
-                "conv_id": conv_id,
-                "prompt": list(history),
-                "completion": turn.content,
-                "score": score,
-                "turn_id": len(history),  # 历史消息数 = 轮次号
-                "single_turn_prompt": single_turn_prompt,
-                "single_turn_completion": single_turn_completion,
-                "single_turn_metadata": metadata,
-            })
+            flat_data.append(
+                {
+                    "conv_id": conv_id,
+                    "prompt": list(history),
+                    "completion": turn.content,
+                    "score": score,
+                    "turn_id": len(history),  # 历史消息数 = 轮次号
+                    "single_turn_prompt": single_turn_prompt,
+                    "single_turn_completion": single_turn_completion,
+                    "single_turn_metadata": metadata,
+                }
+            )
 
-        history.append({
-            "role": normalized_role,
-            "content": turn.content,
-        })
+        history.append(
+            {
+                "role": normalized_role,
+                "content": turn.content,
+            }
+        )
 
     return flat_data
 
@@ -415,24 +423,26 @@ def convert_sessions_to_nested_with_aggregation(
         # 使用第一条记录的元数据
         first = items[0]
 
-        nested_data.append({
-            "conv_id": conv_id,
-            "single_turn_prompt": first["single_turn_prompt"],
-            "single_turn_completion": first["single_turn_completion"],
-            "single_turn_metadata": first["single_turn_metadata"],
-            "turns": [
-                {
-                    "prompt": first["prompt"],
-                    "responses": [
-                        {
-                            "completion": item["completion"],
-                            "score": item["score"],
-                        }
-                        for item in items
-                    ],
-                }
-            ],
-        })
+        nested_data.append(
+            {
+                "conv_id": conv_id,
+                "single_turn_prompt": first["single_turn_prompt"],
+                "single_turn_completion": first["single_turn_completion"],
+                "single_turn_metadata": first["single_turn_metadata"],
+                "turns": [
+                    {
+                        "prompt": first["prompt"],
+                        "responses": [
+                            {
+                                "completion": item["completion"],
+                                "score": item["score"],
+                            }
+                            for item in items
+                        ],
+                    }
+                ],
+            }
+        )
 
     logger.info(
         f"Aggregation complete: {len(nested_data)} unique (conv_id, turn_id) pairs, "
