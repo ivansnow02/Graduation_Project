@@ -19,21 +19,26 @@ from tqdm import tqdm
 # ===== 0. 全局配置与日志优化 =====
 dotenv.load_dotenv()
 
-# # 禁用 Litellm 的自动日志回调，解决 Pydantic 序列化警告刷屏问题
-# litellm.success_callback = []
-# litellm.failure_callback = []
-# litellm.callbacks = []
+# 禁用 Litellm 的自动日志回调，解决 Pydantic 序列化警告刷屏问题
+litellm.success_callback = []
+litellm.failure_callback = []
+litellm.callbacks = []
+
+import warnings
+
+# 忽略 Pydantic 序列化警告 (LiteLLM 返回对象字段不匹配问题)
+warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*")
 
 # 配置日志
 # 注意：为了防止日志打断进度条，我们将 StreamHandler (控制台输出) 移除，
 # 只保留 FileHandler (文件输出)。控制台进度由 tqdm 独占。
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         # logging.StreamHandler(),  <-- 注释掉这行，让控制台清爽一点
-        logging.FileHandler("generation.log", encoding='utf-8')
-    ]
+        logging.FileHandler("generation.log", encoding="utf-8")
+    ],
 )
 
 # 路径配置
@@ -43,13 +48,16 @@ Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
 # ===== 1. 核心 LLM 调用函数 (修改版) =====
 
+
 def get_clean_base_url(url_env_key):
     """清洗 URL，确保格式正确"""
     url = os.getenv(url_env_key, "").strip()
-    if not url: return None
+    if not url:
+        return None
     if "/chat/completions" in url:
         url = url.split("/chat/completions")[0]
     return url.rstrip("/")
+
 
 # 教师配置
 TEACHER_API_KEY = os.getenv("TEACHER_API_KEY", "EMPTY").strip()
@@ -79,13 +87,13 @@ def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
             messages=messages,
             api_base=api_base,
             api_key=api_key,
-            custom_llm_provider="openai", # 强制走 OpenAI 协议
+            custom_llm_provider="openai",  # 强制走 OpenAI 协议
             temperature=temperature,
-            max_tokens=4096, # 留足空间
+            max_tokens=4096,  # 留足空间
             drop_params=True,
             num_retries=3,
             # === 关键修改：尝试通过参数禁用思考 ===
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}}
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
 
         raw_content = response.choices[0].message.content or ""
@@ -102,6 +110,7 @@ def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
 
 # ===== 2. 业务逻辑 (Prompt) =====
 
+
 def generate_initial_student_question(topic_text):
     prompt = f"""
 你是一名中学生，正在学习一节跨学科课程。请根据下面的课程内容，提出一个你真正感到困惑或好奇的问题。
@@ -114,8 +123,11 @@ def generate_initial_student_question(topic_text):
 """
     return call_llm(
         [{"role": "user", "content": prompt}],
-        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+        model=TEACHER_MODEL,
+        api_base=TEACHER_API_BASE,
+        api_key=TEACHER_API_KEY,
     )
+
 
 def generate_teacher_response(history):
     history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
@@ -137,8 +149,11 @@ def generate_teacher_response(history):
 """
     return call_llm(
         [{"role": "user", "content": prompt}],
-        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+        model=TEACHER_MODEL,
+        api_base=TEACHER_API_BASE,
+        api_key=TEACHER_API_KEY,
     )
+
 
 def generate_student_response(history):
     student_types = {
@@ -175,10 +190,13 @@ def generate_student_response(history):
 """
     reply = call_llm(
         [{"role": "user", "content": prompt}],
-        model=STUDENT_MODEL, api_base=STUDENT_API_BASE, api_key=STUDENT_API_KEY,
-        temperature=0.8
+        model=STUDENT_MODEL,
+        api_base=STUDENT_API_BASE,
+        api_key=STUDENT_API_KEY,
+        temperature=0.8,
     )
     return reply, identity, scenario
+
 
 def generate_summary(history):
     history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
@@ -189,15 +207,19 @@ def generate_summary(history):
 """
     return call_llm(
         [{"role": "user", "content": prompt}],
-        model=TEACHER_MODEL, api_base=TEACHER_API_BASE, api_key=TEACHER_API_KEY
+        model=TEACHER_MODEL,
+        api_base=TEACHER_API_BASE,
+        api_key=TEACHER_API_KEY,
     )
+
 
 def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     history = []
 
     # 1. 学生提问
     question = generate_initial_student_question(topic_text)
-    if not question or "[RateLimit]" in question: return None
+    if not question or "[RateLimit]" in question:
+        return None
 
     history.append({"role": "学生", "content": question})
     logging.info(f"[{student_id}] Question: {question[:30]}...")
@@ -211,7 +233,8 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
 
         # 2. 老师回复
         teacher_reply = generate_teacher_response(history)
-        if not teacher_reply or "[RateLimit]" in teacher_reply: break
+        if not teacher_reply or "[RateLimit]" in teacher_reply:
+            break
 
         history.append({"role": "教师", "content": teacher_reply})
 
@@ -227,7 +250,8 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
 
         # 3. 学生回复
         student_reply, identity, scenario = generate_student_response(history)
-        if not student_reply or "[RateLimit]" in student_reply: break
+        if not student_reply or "[RateLimit]" in student_reply:
+            break
 
         final_identity = identity
         final_scenario = scenario
@@ -243,6 +267,7 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
 
 
 # ===== 3. 多进程与文件写入 =====
+
 
 def worker_process_topic(args):
     """
@@ -269,7 +294,7 @@ def worker_process_topic(args):
                 if dialogue_data:
                     dialogue_data["topic_id"] = topic_id
                     dialogue_data["topic_text_preview"] = topic_text[:50]
-                    dialogue_data["repeat_id"] = f"R{r_idx+1}"
+                    dialogue_data["repeat_id"] = f"R{r_idx + 1}"
 
                     # === 实时写入 JSONL ===
                     with open(output_file, "a", encoding="utf-8") as f:
@@ -283,9 +308,11 @@ def worker_process_topic(args):
     logging.info(f"Finished Topic: {topic_id}, Generated {count} dialogues.")
     return topic_id
 
+
 def load_topics(json_path):
     with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 if __name__ == "__main__":
     input_file = os.getenv("MULTI_DIALOGUE_INPUT_FILE", "").strip()
@@ -309,7 +336,12 @@ if __name__ == "__main__":
         # unit='topic' 显示单位，desc 显示描述
         results_iterator = pool.imap_unordered(worker_process_topic, args_list)
 
-        for res in tqdm(results_iterator, total=len(topics), desc="Generating Dialogues", unit="topic"):
+        for res in tqdm(
+            results_iterator,
+            total=len(topics),
+            desc="Generating Dialogues",
+            unit="topic",
+        ):
             # 这里可以选择打印 debug 信息，或者留空让进度条保持干净
             # 详细日志建议去 generation.log 查看
             pass
