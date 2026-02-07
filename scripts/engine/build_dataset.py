@@ -11,6 +11,7 @@ On math-hard:
         --metric_names "accuracy" "interactivity" "token_amount" \
         --metric_weights 1 0.5 -0.5 \
         --user_generation_kwargs '{"model": "gpt-4o"}' \
+        --user_prompt_file "collabllm/prompts/student_simulator.txt" \
         --assistant_generation_kwargs '{"model": "gpt-4o", "temperature": 0.8}' \
         --reward_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
         --output_dir outputs/multiturn_data \
@@ -78,6 +79,11 @@ def data_engine(args):
         else dataset["train"]
     )
 
+    if args.user_prompt_file:
+        with open(args.user_prompt_file, "r", encoding="utf-8") as f:
+            user_prompt_template = f.read()
+            args.user_generation_kwargs["prompt_template"] = user_prompt_template
+
     os.makedirs(args.output_dir, exist_ok=True)
     output_path = osp.join(args.output_dir, f"{args.dataset_name}_multiturn.json")
 
@@ -110,7 +116,9 @@ def data_engine(args):
         return
 
     # Create a ThreadPoolExecutor with max_gen_workers threads
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_gen_workers) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=args.max_gen_workers
+    ) as executor:
         future_to_hash = {}
         for example in pending_examples:
             prompt_hash = compute_hash(example["single_turn_prompt"])
@@ -154,44 +162,155 @@ def data_engine(args):
 
             if multiturn_data is None:
                 continue
-            
+
             data_list.append(multiturn_data)
             seen_prompt_hashes.add(prompt_hash)
 
             # Write to JSON after each new conversation
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(data_list, f, indent=2)
+                json.dump(data_list, f, indent=2, ensure_ascii=False)
 
-            # Push to Hugging Face Hub incrementally
-            MultiturnDataset(data_list).push_to_hub(
-                repo_id=f"{args.hf_entity}/collabllm-multiturn-{args.dataset_name}"
-            )
+            # Push to Hugging Face Hub incrementally if entity is provided
+            if args.hf_entity:
+                try:
+                    MultiturnDataset(data_list).push_to_hub(
+                        repo_id=f"{args.hf_entity}/collabllm-multiturn-{args.dataset_name}"
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to push to Hugging Face Hub: {e}")
 
 
-    
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate multi-turn synthetic conversations with metrics.")
+    parser = argparse.ArgumentParser(
+        description="Generate multi-turn synthetic conversations with metrics."
+    )
 
-    parser.add_argument("--dataset_name", type=str, required=True, help="Name of the single-turn dataset.")
-    parser.add_argument("--metric_names", nargs="+", required=True, help="List of evaluation metric names.")
-    parser.add_argument("--user_generation_kwargs", type=json.loads, default="{}", help="JSON dict of generation kwargs for user.")
-    parser.add_argument("--assistant_generation_kwargs", type=json.loads, default="{}", help="JSON dict of generation kwargs for assistant.")
-    parser.add_argument("--reward_generation_kwargs", type=json.loads, default="{}", help="Optional JSON dict for reward generation.")
-    parser.add_argument("--metric_weights", type=float, nargs="+", default=None, help="Optional weights for each metric.")
-    parser.add_argument("--proact_prompt_ratio", type=float, default=0.5, help="0 for none, 1 for proact, 0~1 for mixed.")
-    parser.add_argument("--add_system_prompt_ratio", type=float, default=0, help="0 for none, 1 for proact, 0~1 for mixed.")
-    parser.add_argument("--num_candidate_responses", type=int, default=2, help="Number of assistant candidates per turn.")
-    parser.add_argument("--max_total_turns", type=int, default=14, help="Maximum number of conversation turns.")
-    parser.add_argument("--max_new_turns", type=int, default=4, help="Window size for context in multi-turn generation.")
-    parser.add_argument("--num_samples", type=int, default=3, help="Sample size for generating multiple conversations in one batch.")
-    parser.add_argument("--train_size", type=int, default=500, help="Number of conversations to generate.")
-    parser.add_argument("--max_workers", type=int, default=16, help="Maximum number of parallel workers for sampling conversations.")
-    parser.add_argument("--max_metric_workers", type=int, default=16, help="Maximum number of parallel workers for metrics.")
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to save generated output.")
-    parser.add_argument("--hf_entity", type=str, required=True, help="Hugging Face user or organization for dataset upload.")
-    parser.add_argument("--save_steps", type=int, default=10, help="Save intermediate results every N steps.")
-    parser.add_argument("--resume", action="store_true", help="Resume from the last saved state if available.")
-    parser.add_argument("--max_gen_workers", type=int, default=8, help="Maximum number of threads to use for generating conversations (ThreadPool size).")
+    parser.add_argument(
+        "--dataset_name",
+        type=str,
+        required=True,
+        help="Name of the single-turn dataset.",
+    )
+    parser.add_argument(
+        "--metric_names",
+        nargs="+",
+        required=True,
+        help="List of evaluation metric names.",
+    )
+    parser.add_argument(
+        "--user_generation_kwargs",
+        type=json.loads,
+        default="{}",
+        help="JSON dict of generation kwargs for user.",
+    )
+    parser.add_argument(
+        "--user_prompt_file",
+        type=str,
+        default=None,
+        help="Path to custom user prompt file.",
+    )
+    parser.add_argument(
+        "--assistant_generation_kwargs",
+        type=json.loads,
+        default="{}",
+        help="JSON dict of generation kwargs for assistant.",
+    )
+    parser.add_argument(
+        "--reward_generation_kwargs",
+        type=json.loads,
+        default="{}",
+        help="Optional JSON dict for reward generation.",
+    )
+    parser.add_argument(
+        "--metric_weights",
+        type=float,
+        nargs="+",
+        default=None,
+        help="Optional weights for each metric.",
+    )
+    parser.add_argument(
+        "--proact_prompt_ratio",
+        type=float,
+        default=0.5,
+        help="0 for none, 1 for proact, 0~1 for mixed.",
+    )
+    parser.add_argument(
+        "--add_system_prompt_ratio",
+        type=float,
+        default=0,
+        help="0 for none, 1 for proact, 0~1 for mixed.",
+    )
+    parser.add_argument(
+        "--num_candidate_responses",
+        type=int,
+        default=2,
+        help="Number of assistant candidates per turn.",
+    )
+    parser.add_argument(
+        "--max_total_turns",
+        type=int,
+        default=14,
+        help="Maximum number of conversation turns.",
+    )
+    parser.add_argument(
+        "--max_new_turns",
+        type=int,
+        default=4,
+        help="Window size for context in multi-turn generation.",
+    )
+    parser.add_argument(
+        "--num_samples",
+        type=int,
+        default=3,
+        help="Sample size for generating multiple conversations in one batch.",
+    )
+    parser.add_argument(
+        "--train_size",
+        type=int,
+        default=500,
+        help="Number of conversations to generate.",
+    )
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=16,
+        help="Maximum number of parallel workers for sampling conversations.",
+    )
+    parser.add_argument(
+        "--max_metric_workers",
+        type=int,
+        default=16,
+        help="Maximum number of parallel workers for metrics.",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory to save generated output.",
+    )
+    parser.add_argument(
+        "--hf_entity",
+        type=str,
+        default=None,
+        help="Hugging Face user or organization for dataset upload (optional).",
+    )
+    parser.add_argument(
+        "--save_steps",
+        type=int,
+        default=10,
+        help="Save intermediate results every N steps.",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the last saved state if available.",
+    )
+    parser.add_argument(
+        "--max_gen_workers",
+        type=int,
+        default=8,
+        help="Maximum number of threads to use for generating conversations (ThreadPool size).",
+    )
 
     load_dotenv(".env")
 
