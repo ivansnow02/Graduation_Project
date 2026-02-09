@@ -266,13 +266,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max_total_turns",
         type=int,
-        default=14,
+        default=8,
         help="Maximum number of conversation turns.",
     )
     parser.add_argument(
         "--max_new_turns",
         type=int,
-        default=4,
+        default=2,
         help="Window size for context in multi-turn generation.",
     )
     parser.add_argument(

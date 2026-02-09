@@ -56,7 +56,7 @@ class LLMCollaborator(object):
         for _ in range(self.num_retries):
             full_response = (
                 litellm.completion(
-                    **self.llm_kwargs, messages=messages, num_retries=self.num_retries
+                    **self.llm_kwargs, messages=messages, num_retries=self.num_retries,extra_body={"chat_template_kwargs": {"enable_thinking": False}}
                 )
                 .choices[0]
                 .message.content

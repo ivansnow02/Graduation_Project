@@ -56,6 +56,7 @@ class UserSimulator(object):
                     **self.llm_kwargs,
                     messages=messages,
                     num_retries=self.num_retries,
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}}
                 )
                 .choices[0]
                 .message.content

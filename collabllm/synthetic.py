@@ -29,7 +29,7 @@ def generate_multiturn_dataset(
     local_tokenizer: Optional[AutoTokenizer] = None,
     vllm_base_model: Optional[Any] = None,
     num_candidate_responses: int = 5,
-    max_total_turns: int = 10,
+    max_total_turns: int = 8,
     max_new_turns: int = 1,
     num_samples: int = 3,
     max_workers: int = 8,
