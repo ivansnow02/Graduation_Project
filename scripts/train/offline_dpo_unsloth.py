@@ -18,7 +18,6 @@ import torch
 from transformers import TrainingArguments
 from trl import DPOTrainer, DPOConfig
 from collabllm.datasets.multiturn import MultiturnDataset
-import wandb
 import re
 
 try:
@@ -45,8 +44,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--load_in_4bit", action="store_true", default=True)
 
     # LoRA config
-    p.add_argument("--peft_r", type=int, default=16)
-    p.add_argument("--peft_alpha", type=int, default=16)
+    p.add_argument("--peft_r", type=int, default=64)
+    p.add_argument("--peft_alpha", type=int, default=32)
     p.add_argument("--peft_dropout", type=float, default=0)  # Unsloth supports 0
     p.add_argument(
         "--target_modules",
