@@ -73,11 +73,28 @@ def data_engine(args):
     dataset_cls = datasets_info[args.dataset_name]["class"]
     task_desc = datasets_info[args.dataset_name]["task_desc"]
     dataset = dataset_cls().to_hf_dataset()
+    # Shuffle the dataset to ensure diverse coverage of topics and student types
+    shuffled_train = dataset["train"].shuffle(seed=42)
+
     train = (
-        dataset["train"].select(range(args.train_size))
+        shuffled_train.select(range(args.train_size))
         if args.train_size > 0
-        else dataset["train"]
+        else shuffled_train
     )
+
+    # Log distribution for verification
+    student_types_count = {}
+    topics_count = set()
+    for item in train:
+        meta = item.get("single_turn_metadata", {})
+        st = meta.get("student_type", "unknown")
+        topic = meta.get("topic_id", "unknown")
+        student_types_count[st] = student_types_count.get(st, 0) + 1
+        topics_count.add(topic)
+
+    print(f"Selected {len(train)} samples.")
+    print(f"Student Type Distribution: {student_types_count}")
+    print(f"Number of Unique Topics: {len(topics_count)}")
 
     if args.user_prompt_file:
         with open(args.user_prompt_file, "r", encoding="utf-8") as f:

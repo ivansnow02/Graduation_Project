@@ -52,6 +52,8 @@ class SingleTurnOrChatMetric:
     def __init__(self, signature: str, **llm_kwargs: Any):
         self.extract_type, self.metric_name = self._parse_signature(signature)
         self.llm_kwargs = llm_kwargs
+        if "base_url" in self.llm_kwargs:
+            self.llm_kwargs["api_base"] = self.llm_kwargs.pop("base_url")
 
         try:
             metric_cls = self._METRIC_REGISTRY[self.metric_name]

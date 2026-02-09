@@ -31,6 +31,10 @@ class UserSimulator(object):
 
         self.llm_kwargs = {"temperature": 1.0, "max_tokens": 1024, **llm_kwargs}
 
+        # Support base_url for vLLM/OpenAI compatible backends
+        if "base_url" in self.llm_kwargs:
+            self.llm_kwargs["api_base"] = self.llm_kwargs.pop("base_url")
+
         assert "model" in self.llm_kwargs, "Model name must be provided in llm_kwargs"
 
     def __call__(self, messages: List[dict]):
