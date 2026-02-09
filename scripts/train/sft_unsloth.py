@@ -90,8 +90,6 @@ def main() -> None:
     )
 
     # --- 关键适配：Qwen 3 依然使用 ChatML 格式 ---
-    # Unsloth 的 "qwen-2.5" 模板完美支持 Qwen 3 的 ChatML 结构
-    # 它会自动处理 special tokens (eos, pad, im_start, im_end)
     tokenizer = get_chat_template(tokenizer, chat_template="qwen3-instruct")
 
     # 配置 LoRA
