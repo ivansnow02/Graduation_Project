@@ -86,12 +86,10 @@ class InterdisciplinaryDataset(SingleTurnDataset):
                     {
                         "prompt": formatted_prompt,
                         "completion": "",
-                        "single_turn_metadata": {
-                            "topic_id": entry.get("id", f"topic_{i + 1}"),
-                            "original_topic": topic_text,
-                            "student_type": s_type,
-                            "student_desc": s_desc,
-                        },
+                        "topic_id": entry.get("id", f"topic_{i + 1}"),
+                        "original_topic": topic_text,
+                        "student_type": s_type,
+                        "student_desc": s_desc,
                     }
                 )
 
