@@ -88,7 +88,9 @@ def data_engine(args):
                     UserWarning,
                 )
                 rng = random.Random(42)
-                indices = [rng.choice(range(max_available)) for _ in range(args.train_size)]
+                indices = [
+                    rng.choice(range(max_available)) for _ in range(args.train_size)
+                ]
                 train = shuffled_train.select(indices)
                 repeat_sampling = True
             else:
@@ -151,24 +153,31 @@ def data_engine(args):
             )
             return
 
-    # Filter out examples whose prompt‐hash is already in seen_prompt_hashes
-    if repeat_sampling:
-        pending_examples = []
-        for idx, ex in enumerate(train):
+    # Filter by simple counting
+    current_count = len(data_list)
+    if current_count >= args.train_size:
+        print(f"Already have {current_count} samples (>= {args.train_size}). Exiting.")
+        return
+
+    print(
+        f"Resuming: Found {current_count} samples. Generating {args.train_size - current_count} more..."
+    )
+
+    pending_examples = []
+    # We assume 'train' is deterministic (seeded). We just skip the first `current_count` items.
+    for idx, ex in enumerate(train):
+        if idx < current_count:
+            continue
+
+        if repeat_sampling:
+            # Use the global index as ID to ensure uniqueness/traceability
             sample_id = f"{idx:06d}"
-            sample_hash = compute_hash(f"{ex['single_turn_prompt']}__{sample_id}")
-            if sample_hash in seen_prompt_hashes:
-                continue
             pending_examples.append((sample_id, ex))
-    else:
-        pending_examples = [
-            ex
-            for ex in train
-            if compute_hash(ex["single_turn_prompt"]) not in seen_prompt_hashes
-        ]
+        else:
+            pending_examples.append(ex)
 
     if not pending_examples:
-        print("No new examples to generate (all seen).")
+        print("No new examples to generate.")
         return
 
     # Create a ThreadPoolExecutor with max_gen_workers threads
