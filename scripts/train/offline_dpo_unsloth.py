@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dataset_repo", type=str, required=True, help="Path to dataset")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--eval_ratio", type=float, default=0.1)
+    p.add_argument("--min_score_gap", type=float, default=0.0)
 
     # Model
     p.add_argument(
@@ -111,7 +112,9 @@ def main() -> None:
 
     # --- 2. Load Dataset ---
     print(f"Loading dataset from {args.dataset_repo}...")
-    ds = MultiturnDataset(args.dataset_repo).to_dpo_dataset(eval_ratio=args.eval_ratio)
+    ds = MultiturnDataset(args.dataset_repo).to_dpo_dataset(
+        eval_ratio=args.eval_ratio, minimum_gap=args.min_score_gap
+    )
 
     # --- 3. Format Dataset ---
     # Helper to strip assistant prefix if template adds it
