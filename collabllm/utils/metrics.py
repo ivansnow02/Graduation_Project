@@ -233,3 +233,95 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
         "cognitive_correction_rate": cognitive_correction_rate,
         "total_score": round(total_score, 4),
     }
+
+
+def calculate_turn_metrics(
+    turn: Annotation, history_annotations: List[Annotation]
+) -> Dict[str, float]:
+    """
+    Calculate reward for a single teacher turn based on its annotation and history context.
+    Returns raw binary/categorical scores (0.0 or 1.0) for each dimension.
+    """
+    # 1. Strategy Density (Is there a strategy?)
+    has_strategy = 1.0 if turn.teaching_strategy else 0.0
+
+    # 2. Strategy Variety (Is it a new strategy?)
+    observed_strategies = set()
+    for ann in history_annotations:
+        if ann.is_teacher_annotation() and ann.teaching_strategy:
+            parts = ann.teaching_strategy.replace("，", ",").split(",")
+            for part in parts:
+                p = part.strip()
+                if p:
+                    canonical = canonicalize_teaching_strategy(p)
+                    if canonical:
+                        observed_strategies.add(canonical)
+
+    current_strategies = set()
+    if turn.teaching_strategy:
+        parts = turn.teaching_strategy.replace("，", ",").split(",")
+        for part in parts:
+            p = part.strip()
+            if p:
+                canonical = canonicalize_teaching_strategy(p)
+                if canonical:
+                    current_strategies.add(canonical)
+
+    is_new_strategy = 1.0 if (current_strategies - observed_strategies) else 0.0
+
+    # 3. IKT (Is there transfer?)
+    has_transfer = (
+        1.0
+        if str(turn.discipline_transfer).strip().lower() in ["是", "yes", "true", "1"]
+        else 0.0
+    )
+
+    # 4. Structure Completeness (Is it a new intent type?)
+    observed_intents = set()
+    for ann in history_annotations:
+        if ann.is_teacher_annotation() and ann.teacher_intent:
+            canonical = canonicalize_teaching_intent(ann.teacher_intent)
+            if canonical:
+                observed_intents.add(canonical)
+
+    current_intent = (
+        canonicalize_teaching_intent(turn.teacher_intent)
+        if turn.teacher_intent
+        else None
+    )
+    is_new_intent = (
+        1.0 if (current_intent and current_intent not in observed_intents) else 0.0
+    )
+
+    # 5. L3 Guidance (Is it L3?)
+    is_l3 = 1.0 if "L3" in str(turn.teacher_guidance_level) else 0.0
+
+    # Weighted Sum
+    # Re-normalize weights to sum to 1.0 (excluding student metrics)
+    # New Weights:
+    # Density: 0.25, Variety: 0.15, IKT: 0.2, Structure: 0.2, L3: 0.2
+    # These weights prioritize continuous engagement (density) and high-level guidance (L3, IKT/Structure)
+    weights = {
+        "strategy_density": 0.25,
+        "strategy_variety": 0.15,
+        "ikt": 0.2,
+        "structure_completeness": 0.2,
+        "l3_guidance_rate": 0.2,
+    }
+
+    total_score = (
+        weights["strategy_density"] * has_strategy
+        + weights["strategy_variety"] * is_new_strategy
+        + weights["ikt"] * has_transfer
+        + weights["structure_completeness"] * is_new_intent
+        + weights["l3_guidance_rate"] * is_l3
+    )
+
+    return {
+        "strategy_density": has_strategy,
+        "strategy_variety": is_new_strategy,
+        "ikt_score": has_transfer,
+        "structure_completeness": is_new_intent,
+        "l3_guidance_rate": is_l3,
+        "total_score": round(total_score, 4),
+    }
