@@ -57,6 +57,7 @@ from tqdm import tqdm
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import warnings
+import random
 import concurrent.futures
 
 from collabllm.datasets.multiturn import MultiturnDataset
@@ -76,11 +77,32 @@ def data_engine(args):
     # Shuffle the dataset to ensure diverse coverage of topics and student types
     shuffled_train = dataset["train"].shuffle(seed=42)
 
-    train = (
-        shuffled_train.select(range(args.train_size))
-        if args.train_size > 0
-        else shuffled_train
-    )
+    repeat_sampling = False
+    if args.train_size > 0:
+        max_available = len(shuffled_train)
+        if args.train_size > max_available:
+            if args.allow_repeat_samples:
+                warnings.warn(
+                    f"Requested train_size={args.train_size} exceeds available train samples "
+                    f"({max_available}). Repeating samples to reach target size.",
+                    UserWarning,
+                )
+                rng = random.Random(42)
+                indices = [rng.choice(range(max_available)) for _ in range(args.train_size)]
+                train = shuffled_train.select(indices)
+                repeat_sampling = True
+            else:
+                warnings.warn(
+                    f"Requested train_size={args.train_size} exceeds available train samples "
+                    f"({max_available}). Clipping to {max_available}.",
+                    UserWarning,
+                )
+                train_size = min(args.train_size, max_available)
+                train = shuffled_train.select(range(train_size))
+        else:
+            train = shuffled_train.select(range(args.train_size))
+    else:
+        train = shuffled_train
 
     # Log distribution for verification
     student_types_count = {}
@@ -111,9 +133,17 @@ def data_engine(args):
         if args.resume:
             with open(output_path, "r", encoding="utf-8") as f:
                 data_list = json.load(f)
-            seen_prompt_hashes = {
-                compute_hash(ex["single_turn_prompt"]) for ex in data_list
-            }
+            if repeat_sampling:
+                seen_prompt_hashes = {
+                    compute_hash(
+                        f"{ex['single_turn_prompt']}__{ex.get('sample_id', '0')}"
+                    )
+                    for ex in data_list
+                }
+            else:
+                seen_prompt_hashes = {
+                    compute_hash(ex["single_turn_prompt"]) for ex in data_list
+                }
         else:
             warnings.warn(
                 "Output file already exists. Use --resume to continue from the last saved state.",
@@ -122,11 +152,20 @@ def data_engine(args):
             return
 
     # Filter out examples whose prompt‐hash is already in seen_prompt_hashes
-    pending_examples = [
-        ex
-        for ex in train
-        if compute_hash(ex["single_turn_prompt"]) not in seen_prompt_hashes
-    ]
+    if repeat_sampling:
+        pending_examples = []
+        for idx, ex in enumerate(train):
+            sample_id = f"{idx:06d}"
+            sample_hash = compute_hash(f"{ex['single_turn_prompt']}__{sample_id}")
+            if sample_hash in seen_prompt_hashes:
+                continue
+            pending_examples.append((sample_id, ex))
+    else:
+        pending_examples = [
+            ex
+            for ex in train
+            if compute_hash(ex["single_turn_prompt"]) not in seen_prompt_hashes
+        ]
 
     if not pending_examples:
         print("No new examples to generate (all seen).")
@@ -138,7 +177,14 @@ def data_engine(args):
     ) as executor:
         future_to_hash = {}
         for example in pending_examples:
-            prompt_hash = compute_hash(example["single_turn_prompt"])
+            if repeat_sampling:
+                sample_id, example = example
+                prompt_hash = compute_hash(
+                    f"{example['single_turn_prompt']}__{sample_id}"
+                )
+            else:
+                sample_id = None
+                prompt_hash = compute_hash(example["single_turn_prompt"])
 
             # Submit generate_multiturn_dataset using kwargs
             future = executor.submit(
@@ -179,6 +225,9 @@ def data_engine(args):
 
             if multiturn_data is None:
                 continue
+
+            if repeat_sampling and sample_id is not None:
+                multiturn_data["sample_id"] = sample_id
 
             data_list.append(multiturn_data)
             seen_prompt_hashes.add(prompt_hash)
@@ -286,6 +335,11 @@ if __name__ == "__main__":
         type=int,
         default=500,
         help="Number of conversations to generate.",
+    )
+    parser.add_argument(
+        "--allow_repeat_samples",
+        action="store_true",
+        help="Allow repeating training samples when train_size exceeds available data.",
     )
     parser.add_argument(
         "--max_workers",
