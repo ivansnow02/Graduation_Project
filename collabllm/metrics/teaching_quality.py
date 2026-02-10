@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import litellm
 from collabllm.metric import BaseMetric
 from collabllm.datasets.types import Annotation, DialogueTurn, TeachingSession
-from collabllm.utils.metrics import calculate_session_metrics
+from collabllm.utils.metrics import calculate_session_metrics, calculate_turn_metrics
 from collabllm.utils.extract_json_reliable import extract_json
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class TeachingQualityMetric(BaseMetric):
         # 1. Annotate the dialogue
         annotations = self._annotate_dialogue(messages)
 
-        # 2. Construct TeachingSession
+        # 2. Construct TeachingSession (for completeness, though we only need annotations now)
         # Ensure we have DialogueTurn objects
         dialogue_turns = [
             DialogueTurn(role=m["role"], content=m["content"]) for m in messages
@@ -125,14 +125,29 @@ class TeachingQualityMetric(BaseMetric):
             annotations=annotations,
         )
 
-        # 3. Calculate Metrics
-        # Clean inconsistent data first (optional but recommended)
-        # session.clean_empty_annotations() # Might remove mismatched annotations
+        # 3. Calculate Metrics (Incremental Reward)
+        # We want to score the LAST turn (the candidate response).
+        # Constraint: The last message in `messages` MUST be the assistant response we are evaluating.
+        # `multiturn_aware_reward` appends the candidate to messages before calling score.
 
-        scores = calculate_session_metrics(session)
+        if not annotations:
+            return {"total_score": 0.0}
 
-        # Flatten the score dictionary (calculate_session_metrics returns nested structure? No, it returns flat dict)
-        # It returns: {"strategy_density": ..., "total_score": ...}
+        # Identify the annotation corresponding to the last assistant turn.
+        # Annotations are in chronological order.
+        # The last annotation SHOULD be the assistant's turn if the last message was assistant.
+        last_ann = annotations[-1]
+
+        # Double check role
+        if not last_ann.is_teacher_annotation():
+            # If the last annotation is Student, it means we somehow annotated a student response?
+            # Or the candidate was Student? (Unlikely for DPO generation).
+            # Fallback to 0 if we can't find a teacher turn at the end.
+            logger.warning("Last annotation is not Teacher. Returning 0.")
+            return {"total_score": 0.0}
+
+        history_anns = annotations[:-1]
+        scores = calculate_turn_metrics(last_ann, history_annotations=history_anns)
 
         return scores["total_score"]
 
