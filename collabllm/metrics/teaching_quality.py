@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import litellm
 from collabllm.metric import BaseMetric
-from collabllm.datasets.types import Annotation, DialogueTurn, TeachingSession
-from collabllm.utils.metrics import calculate_session_metrics, calculate_turn_metrics
+from collabllm.datasets.types import Annotation
+from collabllm.utils.metrics import calculate_turn_metrics
 from collabllm.utils.extract_json_reliable import extract_json
 
 logger = logging.getLogger(__name__)
@@ -106,26 +106,7 @@ class TeachingQualityMetric(BaseMetric):
         # 1. Annotate the dialogue
         annotations = self._annotate_dialogue(messages)
 
-        # 2. Construct TeachingSession (for completeness, though we only need annotations now)
-        # Ensure we have DialogueTurn objects
-        dialogue_turns = [
-            DialogueTurn(role=m["role"], content=m["content"]) for m in messages
-        ]
-
-        # Safe extraction of metadata
-        meta = metadata or {}
-        session = TeachingSession(
-            student_id=str(meta.get("topic_id", "unknown")),
-            student_type=str(meta.get("student_type", "unknown")),
-            scenario="simulated",
-            topic_id=str(meta.get("topic_id", "unknown")),
-            topic_text=str(meta.get("original_topic", "")),
-            repeat_id="0",
-            dialogue=dialogue_turns,
-            annotations=annotations,
-        )
-
-        # 3. Calculate Metrics (Incremental Reward)
+        # 2. Calculate Metrics (Incremental Reward)
         # We want to score the LAST turn (the candidate response).
         # Constraint: The last message in `messages` MUST be the assistant response we are evaluating.
         # `multiturn_aware_reward` appends the candidate to messages before calling score.
@@ -195,8 +176,28 @@ class TeachingQualityMetric(BaseMetric):
 
         return all_pair_annotations
 
+    # Class-level cache to store annotations for dialogue pairs
+    # Key: hash of the pair content
+    # Value: List[Annotation]
+    _CACHE: Dict[str, List[Annotation]] = {}
+
     def _annotate_pair(self, pair: List[Dict[str, str]]) -> List[Annotation]:
-        """Annotate a single pair of turns."""
+        """Annotate a single pair of turns with caching."""
+        # 1. Generate a cache key based on content
+        # We use a tuple of (role, content) for each message to ensure uniqueness
+        key_items = []
+        for msg in pair:
+            key_items.append(f"{msg.get('role', '')}:{msg.get('content', '')}")
+        cache_key = "||".join(key_items)
+
+        # 2. Check cache
+        if cache_key in self._CACHE:
+            # Return a deep copy to avoid mutation issues if any
+            # (Annotation is a Pydantic model or similar, usually immutable-ish, but let's be safe)
+            # Actually, just returning the list is fine if we don't modify it.
+            return self._CACHE[cache_key]
+
+        # 3. If miss, Call LLM
         prompt_text = self._build_prompt(pair)
 
         try:
@@ -213,7 +214,10 @@ class TeachingQualityMetric(BaseMetric):
 
             if isinstance(json_obj, list):
                 # Convert dicts to Annotation objects
-                return [Annotation.from_dict(item) for item in json_obj]
+                annotations = [Annotation.from_dict(item) for item in json_obj]
+                # 4. Update cache
+                self._CACHE[cache_key] = annotations
+                return annotations
             else:
                 logger.warning(f"Annotation output is not a list: {json_obj}")
                 return []
