@@ -238,12 +238,20 @@ def main():
         default="_overall_summary_metrics.json",
         help="Specify the output file name for the summary report.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Directory to save per-file metric results. Defaults to the directory of --summary-file.",
+    )
     args = parser.parse_args()
     summary_dir = os.path.dirname(args.summary_file) or "."
+    output_dir = args.output_dir if args.output_dir else summary_dir
     os.makedirs(summary_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     all_dialogue_metrics = []
     for file_path in args.files:
-        results_from_file = process_file(file_path, summary_dir)
+        results_from_file = process_file(file_path, output_dir)
         all_dialogue_metrics.extend(results_from_file)
     generate_summary_report(all_dialogue_metrics, args.summary_file)
 
