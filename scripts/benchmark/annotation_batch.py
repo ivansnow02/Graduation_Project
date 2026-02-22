@@ -110,8 +110,7 @@ def prepare_batch_file(
                     body = {
                         "model": model,
                         "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.8,
-                        "top_p": 0.95,
+                        "temperature": 0.0,  # 降低温度，保证输出的稳定性和一致性
                         "max_tokens": 5000,
                     }
 
@@ -318,7 +317,7 @@ def main():
         "--thinking-budget", type=int, default=512, help="Thinking budget tokens"
     )
     prepare_parser.add_argument(
-        "--max-size", type=float, default=6.0, help="Max output file size in MB"
+        "--max-size", type=float, default=30.0, help="Max output file size in MB"
     )
 
     # merge
