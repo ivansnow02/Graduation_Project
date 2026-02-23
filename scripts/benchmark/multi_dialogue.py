@@ -108,6 +108,24 @@ def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
         return None
 
 
+def build_messages_from_history(history, speaker):
+    """将历史对话转换为标准多轮 chat messages 结构。"""
+    if speaker == "teacher":
+        role_map = {"学生": "user", "教师": "assistant"}
+    elif speaker == "student":
+        role_map = {"教师": "user", "学生": "assistant"}
+    else:
+        raise ValueError(f"Unsupported speaker: {speaker}")
+
+    messages = []
+    for turn in history:
+        msg_role = role_map.get(turn.get("role"))
+        content = (turn.get("content") or "").strip()
+        if msg_role and content:
+            messages.append({"role": msg_role, "content": content})
+    return messages
+
+
 # ===== 2. 业务逻辑 (Prompt) =====
 
 
@@ -115,8 +133,9 @@ def generate_initial_student_question(topic_text):
     prompt = f"""
 你是一名中学生，正在学习一节跨学科课程。请根据下面的课程内容，提出一个你真正感到困惑或好奇的问题。
 要求：
-1. 只需要输出问题本身，不要输出“学生：”或任何前缀。
-2. 问题要具体，不要太宽泛。
+1. 回答要口语化，符合中学生身份。
+2. 只要输出回答内容，不要输出角色前缀。
+3. 不要输出你选择的状态说明（如“（1）学生...”），直接输出对应的对话内容即可。
 
 课程内容如下：
 {topic_text}
@@ -130,8 +149,7 @@ def generate_initial_student_question(topic_text):
 
 
 def generate_teacher_response(history):
-    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
-    prompt = f"""
+    system_prompt = """
 你是一位跨学科的教师，始终使用苏格拉底式提问法来引导学生。
 目标：通过逐轮递进的问题，引导学生独立思考。
 
@@ -141,17 +159,22 @@ def generate_teacher_response(history):
 3. 鼓励跨学科思考（生物、地理、物理、历史等）。
 4. 不要直接给答案，除非学生完全卡住需要提供脚手架。
 5. 当判断教学目标达成时，请输出一句简短总结，并**严格以字符串 [结束] 结尾**。
-
-对话历史：
-{history_text}
-
-请输出教师的回答：
 """
+    messages = [{"role": "system", "content": system_prompt.strip()}]
+    messages.extend(build_messages_from_history(history, speaker="teacher"))
+    messages.append(
+        {
+            "role": "user",
+            "content": "请基于以上对话继续教学。只输出教师当前这一轮的一条回复。",
+        }
+    )
+
     return call_llm(
-        [{"role": "user", "content": prompt}],
+        messages,
         model=TEACHER_MODEL,
         api_base=TEACHER_API_BASE,
         api_key=TEACHER_API_KEY,
+        temperature=0.9,
     )
 
 
@@ -172,9 +195,7 @@ def generate_student_response(history):
     identity, instruction = random.choice(list(student_types.items()))
     scenario = random.choice(scenarios)
 
-    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
-
-    prompt = f"""
+    system_prompt = f"""
 你是一名中学生。请根据教师的问题给出回答。
 你的设定：{identity}
 当前状态：{scenario}
@@ -182,31 +203,40 @@ def generate_student_response(history):
 要求：
 1. 回答要口语化，符合中学生身份。
 2. 只要输出回答内容，不要输出角色前缀。
-
-对话历史：
-{history_text}
-
-请输出学生的回答：
 """
+
+    messages = [{"role": "system", "content": system_prompt.strip()}]
+    messages.extend(build_messages_from_history(history, speaker="student"))
+    messages.append(
+        {
+            "role": "user",
+            "content": "请基于以上对话，只输出学生当前这一轮的回答。",
+        }
+    )
+
     reply = call_llm(
-        [{"role": "user", "content": prompt}],
+        messages,
         model=STUDENT_MODEL,
         api_base=STUDENT_API_BASE,
         api_key=STUDENT_API_KEY,
-        temperature=0.8,
+        temperature=1.0,
     )
     return reply, identity, scenario
 
 
 def generate_summary(history):
-    history_text = "\n".join([f"{h['role']}：{h['content']}" for h in history])
-    prompt = f"""
-请以教师的口吻，对以下师生对话进行简短的教学总结，并回答学生最初的问题。
-对话历史：
-{history_text}
-"""
+    system_prompt = "请以教师口吻进行简短教学总结，并回答学生最初的问题。"
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(build_messages_from_history(history, speaker="teacher"))
+    messages.append(
+        {
+            "role": "user",
+            "content": "请基于以上对话给出最终总结与回答。只输出总结内容。",
+        }
+    )
+
     return call_llm(
-        [{"role": "user", "content": prompt}],
+        messages,
         model=TEACHER_MODEL,
         api_base=TEACHER_API_BASE,
         api_key=TEACHER_API_KEY,
