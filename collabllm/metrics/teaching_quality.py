@@ -93,7 +93,7 @@ class TeachingQualityMetric(BaseMetric):
         completion: str,
         messages: Optional[List[Dict[str, str]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, float]:
+    ) -> float:
         """
         Annotate the full `messages` history and compute the teaching quality score.
         """
@@ -101,7 +101,7 @@ class TeachingQualityMetric(BaseMetric):
             logger.warning(
                 "TeachingQualityMetric received empty messages. Returning 0."
             )
-            return {"total_score": 0.0}
+            return 0.0
 
         # 1. Annotate the dialogue
         annotations = self._annotate_dialogue(messages)
@@ -112,22 +112,18 @@ class TeachingQualityMetric(BaseMetric):
         # `multiturn_aware_reward` appends the candidate to messages before calling score.
 
         if not annotations:
-            return {"total_score": 0.0}
+            return 0.0
 
         # Identify the annotation corresponding to the last assistant turn.
-        # Annotations are in chronological order.
-        # The last annotation SHOULD be the assistant's turn if the last message was assistant.
-        last_ann = annotations[-1]
+        # Find the last teacher annotation
+        teacher_anns = [ann for ann in annotations if ann.is_teacher_annotation()]
+        if not teacher_anns:
+            logger.warning("No Teacher annotation found in messages. Returning 0.0.")
+            return 0.0
 
-        # Double check role
-        if not last_ann.is_teacher_annotation():
-            # If the last annotation is Student, it means we somehow annotated a student response?
-            # Or the candidate was Student? (Unlikely for DPO generation).
-            # Fallback to 0 if we can't find a teacher turn at the end.
-            logger.warning("Last annotation is not Teacher. Returning 0.")
-            return {"total_score": 0.0}
-
-        history_anns = annotations[:-1]
+        last_ann = teacher_anns[-1]
+        last_teacher_idx = annotations.index(last_ann)
+        history_anns = annotations[:last_teacher_idx]
         scores = calculate_turn_metrics(last_ann, history_annotations=history_anns)
 
         return scores["total_score"]

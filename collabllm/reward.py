@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import statistics as stats
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Sequence, Tuple, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from collabllm.metric import SingleTurnOrChatMetric
@@ -34,12 +34,15 @@ def _score_one_metric(
     metadata: Dict[str, Any] | None,
 ) -> float:
     metric = SingleTurnOrChatMetric(signature=metric_name, **metric_kwargs)
-    return metric(
+    res = metric(
         messages=messages,
         single_turn_prompt=prompt,
         single_turn_completion=completion,
         metadata=metadata,
     )
+    from typing import cast
+
+    return cast(float, res)
 
 
 # --------------------------------------------------------------------------- #
@@ -85,7 +88,7 @@ def multiturn_aware_reward(
     max_metric_workers: int = 16,
     return_details: bool = False,
     **chat_simulation_kwargs,
-) -> Dict[str, Any]:
+) -> Union[Dict[str, Any], Tuple[Dict[str, Any], List[Any]]]:
     """
     Compute rewards for `num_samples` conversations returned in one batch.
     """
