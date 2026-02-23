@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import litellm
 from collabllm.prompts import EXTRACT_MULTITURN_COMPLETION_PROMPT
@@ -24,7 +24,7 @@ class BaseMetric(abc.ABC):
         completion: str,
         messages: Optional[List[Dict[str, str]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, float]:
+    ) -> Union[float, Dict[str, float]]:
         """Compute the metric(s) for a prompt–completion pair."""
 
 
@@ -75,7 +75,7 @@ class SingleTurnOrChatMetric:
         single_turn_prompt: str,
         single_turn_completion: str,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, float]:
+    ) -> Union[float, Dict[str, float]]:
         """Main entry-point."""
         if self.extract_type:
             completion = self._extract_final_completion(messages, metadata)
