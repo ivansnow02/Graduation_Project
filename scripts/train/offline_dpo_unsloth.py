@@ -67,6 +67,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max_new_tokens", type=int, default=1024)
     p.add_argument("--eval_steps", type=int, default=100)
     p.add_argument("--save_steps", type=int, default=500)
+    p.add_argument(
+        "--save_only_model",
+        action="store_true",
+        help="Only save model weights (skip optimizer/scheduler state).",
+    )
+    p.add_argument(
+        "--save_total_limit",
+        type=int,
+        default=None,
+        help="Limit total number of checkpoints. Older ones are deleted.",
+    )
 
     # Misc
     p.add_argument("--wandb_project", type=str, default=None)
@@ -173,6 +184,8 @@ def main() -> None:
         max_prompt_length=args.max_prompt_length,
         save_strategy="steps",
         save_steps=args.save_steps,
+        save_only_model=args.save_only_model,
+        save_total_limit=args.save_total_limit,
         eval_strategy="steps",
         eval_steps=args.eval_steps,
         gradient_checkpointing=True,
