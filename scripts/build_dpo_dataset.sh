@@ -181,3 +181,24 @@ uv run --project . scripts/train/online_dpo_unsloth.py \
     --save_total_limit 3 \
     --use_vllm \
     --use_swanlab; /usr/bin/shutdown
+
+uv run scripts/train/sft_unsloth.py \
+    --model_name unsloth/Qwen3-14B-unsloth-bnb-4bit \
+    --dataset_repo data/sft_mixed.jsonl \
+    --output_dir outputs/sid_cqia_mixed_r64 \
+    --max_seq_length 4096 \
+    --target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
+    --load_in_4bit \
+    --peft_r 64 \
+    --peft_alpha 128 \
+    --learning_rate 1.5e-5 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --logging_steps 1 \
+    --warmup_ratio 0.1 \
+    --lr_scheduler_type cosine \
+    --weight_decay 0.01 \
+    --packing \
+    --use_swanlab; shutdown
+
