@@ -148,18 +148,36 @@ uv run scripts/train/merge_warmup.py \
     --load_in_4bit \
     --save_method merged_16bit 2>&1 | tee outputs/logs/merge_warmup.log; shutdown
 vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
-    --port 8000 \
-    --gpu-memory-utilization 0.45 \
-    --max-model-len 4096 \
-    --quantization bitsandbytes \
-    --trust-remote-code
-vllm serve /root/autodl-fs/output/qwen14b_dpo1k_merged_4bit \
-    --port 8001 \
-    --gpu-memory-utilization 0.45 \
-    --max-model-len 4096 \
-    --quantization bitsandbytes \
-    --served-model-name socratic-qwen \
-    --trust-remote-code 2>&1 | tee outputs/logs/vllm.log
+    --enable-lora \
+    --max-lora-rank 64 \
+    --lora-modules teacher_model=outputs/dpo_model_500_3can_opt \
+    --port 8000
+
+    
+uv run scripts/benchmark/multi_dialogue.py ; /usr/bin/shutdown
 
 
-uv run scripts/merge_16bit.py 2>&1 | tee /root/autodl-fs/output/logs/merge.log ; shutdown
+uv run --project . scripts/train/online_dpo_unsloth.py \
+    --dataset_name interdisciplinary \
+    --dataset_repo "outputs/dpo_500_3can_2/interdisciplinary_multiturn.json" \
+    --output_dir "outputs/online_dpo_model_500_3can" \
+    --model_name "unsloth/Qwen3-14B-unsloth-bnb-4bit" \
+    --metric_names "teaching_quality" \
+    --metric_weights 1.0 \
+    --user_generation_kwargs '{"model": "openai/unsloth/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://0.0.0.0:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
+    --assistant_generation_kwargs '{"model": "openai/unsloth/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://0.0.0.0:8000/v1", "api_key": "not-needed", "temperature": 1.0, "max_tokens": 2048}' \
+    --reward_generation_kwargs '{"model": "openai/qwen-plus"}' \
+    --learning_rate 2e-6 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 8 \
+    --max_seq_length 4096 \
+    --num_train_epochs 3 \
+    --logging_steps 1 \
+    --save_steps 10 \
+    --num_samples 3 \
+    --max_new_turns 4 \
+    --max_metric_workers 2 \
+    --save_only_model \
+    --save_total_limit 3 \
+    --use_vllm \
+    --use_swanlab; /usr/bin/shutdown
