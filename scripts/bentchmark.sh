@@ -1,8 +1,13 @@
-uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpo_500_3can/ -m qwen-flash -o data/batch/dpo_500_3can/batch.jsonl
+mkdir -p data/batch/dpo_1k_3can
+uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpo_1k_3can -m qwen-flash -o data/batch/dpo_1k_3can/batch.jsonl
 
-uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpo_500_3can/ -b data/batchoutput/dpo500/dpo.jsonl -o data/final/dpo_500_3can_2/
 
-uv run scripts/benchmark/objective_eval.py data/final/dpo_500_3can_2/*.jsonl    --summary-file data/metrics/dpo500_3can_2.json    --output-dir data/metrics/dpo500_per_file_metrics
+mkdir -p data/final/dpo_1k_3can
+uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpo_1k_3can/ -b data/batchoutput/dpo1k/dpo.jsonl -o data/final/dpo_1k_3can/
+
+
+mkdir -p data/metrics/dpo1k_per_file_metrics
+uv run scripts/benchmark/objective_eval.py data/final/dpo_1k_3can/*.jsonl    --summary-file data/metrics/dpo1k_3can.json    --output-dir data/metrics/dpo1k_per_file_metrics
 
 ## baseline
 uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/qwen-14b/ -m qwen-flash -o data/batch/baseline/base.jsonl

@@ -241,15 +241,30 @@ def calculate_turn_metrics(
     """
     Calculate reward for a single teacher turn based on its annotation and history context.
     Returns raw binary/categorical scores (0.0 or 1.0) for each dimension.
+
+    增强：检测"无效复读"策略并施加惩罚。
     """
+    # 0. 无效复读检测 — 如果当前轮被标为"无效复读"，直接惩罚
+    is_invalid_echo = False
+    if turn.teaching_strategy:
+        raw_parts = turn.teaching_strategy.replace("\uff0c", ",").split(",")
+        for part in raw_parts:
+            p = part.strip()
+            if p:
+                canonical = canonicalize_teaching_strategy(p)
+                if canonical == "invalid_echo":
+                    is_invalid_echo = True
+                    break
+
     # 1. Strategy Density (Is there a strategy?)
-    has_strategy = 1.0 if turn.teaching_strategy else 0.0
+    # 无效复读不算有效策略
+    has_strategy = 0.0 if is_invalid_echo else (1.0 if turn.teaching_strategy else 0.0)
 
     # 2. Strategy Variety (Is it a new strategy?)
     observed_strategies = set()
     for ann in history_annotations:
         if ann.is_teacher_annotation() and ann.teaching_strategy:
-            parts = ann.teaching_strategy.replace("，", ",").split(",")
+            parts = ann.teaching_strategy.replace("\uff0c", ",").split(",")
             for part in parts:
                 p = part.strip()
                 if p:
@@ -259,7 +274,7 @@ def calculate_turn_metrics(
 
     current_strategies = set()
     if turn.teaching_strategy:
-        parts = turn.teaching_strategy.replace("，", ",").split(",")
+        parts = turn.teaching_strategy.replace("\uff0c", ",").split(",")
         for part in parts:
             p = part.strip()
             if p:
@@ -294,13 +309,15 @@ def calculate_turn_metrics(
     )
 
     # 5. L3 Guidance (Is it L3?)
-    is_l3 = 1.0 if "L3" in str(turn.teacher_guidance_level) else 0.0
+    # 无效复读即使被标为 L3 也强制降为 0
+    is_l3 = (
+        0.0
+        if is_invalid_echo
+        else (1.0 if "L3" in str(turn.teacher_guidance_level) else 0.0)
+    )
 
     # Weighted Sum
-    # Re-normalize weights to sum to 1.0 (excluding student metrics)
-    # New Weights:
     # Density: 0.25, Variety: 0.15, IKT: 0.2, Structure: 0.2, L3: 0.2
-    # These weights prioritize continuous engagement (density) and high-level guidance (L3, IKT/Structure)
     weights = {
         "strategy_density": 0.25,
         "strategy_variety": 0.15,
@@ -317,11 +334,16 @@ def calculate_turn_metrics(
         + weights["l3_guidance_rate"] * is_l3
     )
 
+    # 无效复读额外惩罚：即使其他维度有分，也要压低总分
+    if is_invalid_echo:
+        total_score = max(total_score - 0.15, 0.0)
+
     return {
         "strategy_density": has_strategy,
         "strategy_variety": is_new_strategy,
         "ikt_score": has_transfer,
         "structure_completeness": is_new_intent,
         "l3_guidance_rate": is_l3,
+        "is_invalid_echo": 1.0 if is_invalid_echo else 0.0,
         "total_score": round(total_score, 4),
     }
