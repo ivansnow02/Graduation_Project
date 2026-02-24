@@ -29,6 +29,11 @@ except ImportError:
 
 
 def parse_args() -> argparse.Namespace:
+    def _str2bool(v):
+        if isinstance(v, bool):
+            return v
+        return str(v).strip().lower() in {"1", "true", "yes", "y", "on"}
+
     p = argparse.ArgumentParser("Unsloth-accelerated Offline DPO Trainer")
 
     # Data / paths
@@ -78,6 +83,24 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Limit total number of checkpoints. Older ones are deleted.",
     )
+    p.add_argument(
+        "--load_best_model_at_end",
+        type=_str2bool,
+        default=False,
+        help="Load best checkpoint at training end.",
+    )
+    p.add_argument(
+        "--metric_for_best_model",
+        type=str,
+        default="eval_rewards/margins",
+        help="Metric name used to select best checkpoint.",
+    )
+    p.add_argument(
+        "--greater_is_better",
+        type=_str2bool,
+        default=True,
+        help="Whether larger metric value indicates better model.",
+    )
 
     # Misc
     p.add_argument("--wandb_project", type=str, default=None)
@@ -109,17 +132,26 @@ def main() -> None:
     # If using Qwen models, ensure template is correct
     tokenizer = get_chat_template(tokenizer, chat_template="qwen3-instruct")
 
-    # Apply LoRA
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=args.peft_r,
-        target_modules=args.target_modules.split(","),
-        lora_alpha=args.peft_alpha,
-        lora_dropout=args.peft_dropout,
-        bias="none",
-        use_gradient_checkpointing="unsloth",
-        random_state=3407,
+    # Apply LoRA (skip if the loaded model already contains adapters)
+    has_existing_lora = hasattr(model, "peft_config") and bool(
+        getattr(model, "peft_config", None)
     )
+    if has_existing_lora:
+        print(
+            "Detected existing LoRA adapters in the loaded model. "
+            "Skipping FastLanguageModel.get_peft_model(...)."
+        )
+    else:
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=args.peft_r,
+            target_modules=args.target_modules.split(","),
+            lora_alpha=args.peft_alpha,
+            lora_dropout=args.peft_dropout,
+            bias="none",
+            use_gradient_checkpointing="unsloth",
+            random_state=3407,
+        )
 
     # --- 2. Load Dataset ---
     print(f"Loading dataset from {args.dataset_repo}...")
@@ -188,6 +220,9 @@ def main() -> None:
         save_total_limit=args.save_total_limit,
         eval_strategy="steps",
         eval_steps=args.eval_steps,
+        load_best_model_at_end=args.load_best_model_at_end,
+        metric_for_best_model=args.metric_for_best_model,
+        greater_is_better=args.greater_is_better,
         gradient_checkpointing=True,
     )
 

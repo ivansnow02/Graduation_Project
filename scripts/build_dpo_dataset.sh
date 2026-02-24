@@ -64,33 +64,102 @@ uv run scripts/data_prep/to_dpo_format.py --input_file outputs/dpo_5/interdiscip
 
 
 #dpo bench
-vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
-    --enable-lora \
-    --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/dpo_model_500_3can_opt \
-    --port 8000
-
-
-uv run scripts/benchmark/multi_dialogue.py ; /usr/bin/shutdown
+STUDENT_LOCAL_MODEL="unsloth/Qwen3-14B-unsloth-bnb-4bit" \
+TEACHER_BASE_MODEL="outputs/qwen14b_warmup_merged_4bit" \
+TEACHER_ADAPTER_MODEL="outputs/dpo_model_1k_3can_opt" \
+MULTI_DIALOGUE_WORKERS=1 \
+uv run scripts/benchmark/multi_dialogue_unsloth.py 2>&1 | tee outputs/logs/multi_dialogue_unsloth.log ; /usr/bin/shutdown
 
 
 uv run scripts/train/offline_dpo_unsloth.py \
-    --dataset_repo "outputs/dpo_base_500_3can/interdisciplinary_multiturn.json" \
-    --output_dir "outputs/dpo_base_500_3can_opt" \
-    --model_name "unsloth/Qwen3-14B-unsloth-bnb-4bit" \
+    --dataset_repo "outputs/dpo_mix_1000_3can/interdisciplinary_multiturn.json" \
+    --output_dir "outputs/dpo_mix_1000_3can_opt" \
+    --model_name "outputs/qwen14b_warmup_merged" \
     --learning_rate 2e-6 \
     --per_device_train_batch_size 4 \
     --gradient_accumulation_steps 8 \
     --max_seq_length 4096 \
     --num_train_epochs 3 \
     --logging_steps 1 \
-    --eval_steps 10 \
-    --save_steps 10 \
+    --eval_steps 50 \
+    --save_steps 50 \
     --min_score_gap 0.05 \
-    --save_only_model \
     --save_total_limit 3 \
+    --load_best_model_at_end True \
+    --metric_for_best_model "eval_rewards/margins" \
+    --greater_is_better True \
+    --save_only_model \
     --use_swanlab; /usr/bin/shutdown
 
 
 ## sft
+uv run scripts/train/sft_unsloth.py \
+    --model_name unsloth/Qwen3-14B-unsloth-bnb-4bit \
+    --dataset_repo data/converted_2500.jsonl \
+    --output_dir outputs/sid_warmup_attention_only \
+    --max_seq_length 4096 \
+    --target_modules "q_proj,k_proj,v_proj,o_proj" \
+    --load_in_4bit \
+    --peft_r 16 \
+    --peft_alpha 32 \
+    --learning_rate 2e-5 \
+    --num_train_epochs 1 \
+    --per_device_train_batch_size 4 \
+    --gradient_accumulation_steps 4 \
+    --logging_steps 1 \
+    --warmup_steps 10 \
+    --use_swanlab; shutdown
 
+# merge warmup LoRA into a standalone base model
+uv run scripts/train/merge_warmup.py \
+    --model_name outputs/sid_warmup_attention_only \
+    --output_dir outputs/qwen14b_warmup_merged_4bit \
+    --max_seq_length 4096 \
+    --load_in_4bit \
+    --save_method merged_4bit_forced 2>&1 | tee outputs/logs/merge_warmup.log; shutdown
+
+
+uv run scripts/train/offline_dpo_unsloth.py \
+    --dataset_repo "outputs/dpo_mix_1000_3can/interdisciplinary_multiturn.json" \
+    --output_dir "outputs/dpo_model_1k_3can_opt" \
+    --model_name "outputs/qwen14b_warmup_merged_4bit" \
+    --target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
+    --peft_r 64 \
+    --peft_alpha 128 \
+    --learning_rate 2e-6 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 16 \
+    --max_seq_length 4096 \
+    --num_train_epochs 3 \
+    --logging_steps 1 \
+    --eval_steps 50 \
+    --save_steps 50 \
+    --save_total_limit 2 \
+    --load_best_model_at_end True \
+    --metric_for_best_model "eval_rewards/margins" \
+    --greater_is_better True \
+    --save_only_model \
+    --use_swanlab; shutdown
+
+uv run scripts/train/merge_warmup.py \
+    --model_name outputs/dpo_model_1k_3can_opt \
+    --output_dir /root/autodl-fs/output/qwen14b_socratic_16bit \
+    --max_seq_length 4096 \
+    --load_in_4bit \
+    --save_method merged_16bit 2>&1 | tee outputs/logs/merge_warmup.log; shutdown
+vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
+    --port 8000 \
+    --gpu-memory-utilization 0.45 \
+    --max-model-len 4096 \
+    --quantization bitsandbytes \
+    --trust-remote-code
+vllm serve /root/autodl-fs/output/qwen14b_dpo1k_merged_4bit \
+    --port 8001 \
+    --gpu-memory-utilization 0.45 \
+    --max-model-len 4096 \
+    --quantization bitsandbytes \
+    --served-model-name socratic-qwen \
+    --trust-remote-code 2>&1 | tee outputs/logs/vllm.log
+
+
+uv run scripts/merge_16bit.py 2>&1 | tee /root/autodl-fs/output/logs/merge.log ; shutdown
