@@ -25,7 +25,7 @@ except Exception:
 
 def parse_args():
     p = argparse.ArgumentParser("infer")
-    p.add_argument("--model_dir", type=str, default="outputs/sid_unsloth_sft")
+    p.add_argument("--model_dir", type=str, default="outputs/dpo_model_1k_3can_opt")
     p.add_argument("--load_in_4bit", action="store_true")
     p.add_argument(
         "--prompt",
@@ -85,7 +85,7 @@ def main():
     # apply chat template if available
     try:
         prompt = tokenizer.apply_chat_template(
-            convo, tokenize=False, add_generation_prompt=True
+            convo, tokenize=False, add_generation_prompt=True,enable_thinking = False
         )
     except Exception:
         # fallback to raw user_text
