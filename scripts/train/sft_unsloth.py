@@ -19,12 +19,13 @@ from trl.trainer.sft_config import SFTConfig
 from trl.trainer.sft_trainer import SFTTrainer
 
 
-
 try:
     from swanlab.integration.transformers import SwanLabCallback
+
     SWANLAB_INSTALLED = True
 except ImportError:
     SWANLAB_INSTALLED = False
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser("Unsloth accelerated SFT trainer for Qwen 3")
@@ -36,23 +37,46 @@ def parse_args() -> argparse.Namespace:
     # Model - 默认改为 Qwen 3
     # 如果你是 4bit 版本，可以用 unsloth/Qwen3-14B-Instruct-bnb-4bit (如果 Unsloth 已发布)
     # 或者直接用原始权重配合 --load_in_4bit
-    p.add_argument("--model_name", type=str, required=True, default="Qwen/Qwen3-14B-Instruct")
+    p.add_argument(
+        "--model_name",
+        type=str,
+        required=True,
+        default="unsloth/Qwen3-14B-Instruct-bnb-4bit",
+    )
     p.add_argument("--max_seq_length", type=int, default=4096)
     p.add_argument("--load_in_4bit", action="store_true", default=True)
 
     # LoRA config
-    p.add_argument("--peft_r", type=int, default=16)
-    p.add_argument("--peft_alpha", type=int, default=16)
-    p.add_argument("--target_modules", type=str, default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj")
+    p.add_argument("--peft_r", type=int, default=64)
+    p.add_argument("--peft_alpha", type=int, default=128)  # 通常设为 2*r
+    p.add_argument(
+        "--target_modules",
+        type=str,
+        default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
+    )
 
     # Training args
-    p.add_argument("--learning_rate", type=float, default=2e-5)
-    p.add_argument("--num_train_epochs", type=int, default=1) # SID 切片数据，跑 1 epoch 足矣
-    p.add_argument("--per_device_train_batch_size", type=int, default=4)
-    p.add_argument("--per_device_eval_batch_size", type=int, default=4)
-    p.add_argument("--gradient_accumulation_steps", type=int, default=4)
+    p.add_argument(
+        "--learning_rate", type=float, default=1.5e-5
+    )  # 全线性层 LoRA 不宜太高
+    p.add_argument("--num_train_epochs", type=int, default=1)
+    p.add_argument("--per_device_train_batch_size", type=int, default=2)
+    p.add_argument("--per_device_eval_batch_size", type=int, default=2)
+    p.add_argument(
+        "--gradient_accumulation_steps", type=int, default=8
+    )  # 等效 batch_size=16
     p.add_argument("--logging_steps", type=int, default=1)
-    p.add_argument("--warmup_steps", type=int, default=10)
+    p.add_argument(
+        "--warmup_ratio", type=float, default=0.1
+    )  # 10% warmup，比固定 steps 更稳
+    p.add_argument("--lr_scheduler_type", type=str, default="cosine")
+    p.add_argument("--weight_decay", type=float, default=0.01)
+    p.add_argument(
+        "--packing",
+        action="store_true",
+        default=True,
+        help="Pack short sequences together",
+    )
 
     # Misc
     p.add_argument("--wandb_project", type=str, default=None)
@@ -61,20 +85,18 @@ def parse_args() -> argparse.Namespace:
 
     return p.parse_args()
 
+
 def main() -> None:
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
-
 
     # --- 1. 配置 Logger ---
     callbacks = []
     if args.use_swanlab and SWANLAB_INSTALLED:
         swanlab_callback = SwanLabCallback(
-            project="sid-qwen3-14b-sft",
-            run_name=args.output_dir.split("/")[-1]
+            project="sid-qwen3-14b-sft", run_name=args.output_dir.split("/")[-1]
         )
         callbacks.append(swanlab_callback)
-
 
     # --- 2. 加载数据 ---
     print(f"Loading dataset from {args.dataset_repo}...")
@@ -122,7 +144,6 @@ def main() -> None:
     # Qwen 3 的标准回答起始符依然是 <|im_start|>assistant\n
     response_template = "<|im_start|>assistant\n"
 
-
     # --- 6. 配置 Trainer ---
     training_args = SFTConfig(
         output_dir=args.output_dir,
@@ -131,9 +152,11 @@ def main() -> None:
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
-        # max_seq_length=args.max_seq_length,
         logging_steps=args.logging_steps,
-        warmup_steps=args.warmup_steps,
+        warmup_ratio=args.warmup_ratio,
+        lr_scheduler_type=args.lr_scheduler_type,
+        weight_decay=args.weight_decay,
+        packing=args.packing,
         optim="adamw_8bit",
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
@@ -170,9 +193,12 @@ def main() -> None:
     if args.save_gguf:
         print("Converting to GGUF...")
         try:
-            model.save_pretrained_gguf(args.output_dir, tokenizer, quantization_method="q4_k_m")
+            model.save_pretrained_gguf(
+                args.output_dir, tokenizer, quantization_method="q4_k_m"
+            )
         except Exception as e:
             print(f"GGUF saving failed: {e}")
+
 
 if __name__ == "__main__":
     main()

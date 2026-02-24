@@ -77,8 +77,9 @@ def canonicalize_teaching_intent(text: str) -> Optional[str]:
 
 def canonicalize_teaching_strategy(text: str) -> Optional[str]:
     """
-    将教学策略文本规范化为 8 大 SID 类别之一（或 None 如果空白/未知）。
-    8 大类别：
+    将教学策略文本规范化为 9 大类别之一（或 None 如果空白/未知）。
+    类别（按优先级排序）：
+      0. invalid_echo - 无效复读（最高优先级，用于惩罚复读机）
       1. scenario_questioning - 情境设问、场景问题
       2. follow_up_questioning - 追问、延伸提问
       3. analogies - 类比、类比法
@@ -92,6 +93,10 @@ def canonicalize_teaching_strategy(text: str) -> Optional[str]:
         return None
 
     text = text.strip().lower()
+
+    # 0. 无效复读 (Invalid Echo) — 最高优先级，防止被其他规则吞没
+    if re.search(r"无效复读|复读|echo|parrot|repeat", text):
+        return "invalid_echo"
 
     # 1. 情境设问 (Scenario-based questioning)
     if re.search(r"情境|场景|scenario|context|situate", text):
