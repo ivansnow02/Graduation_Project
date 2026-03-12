@@ -147,7 +147,11 @@ uv run scripts/train/merge_warmup.py \
     --max_seq_length 4096 \
     --load_in_4bit \
     --save_method merged_16bit 2>&1 | tee outputs/logs/merge_warmup.log; shutdown
-
+vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
+    --enable-lora \
+    --max-lora-rank 64 \
+    --lora-modules teacher_model=outputs/sid_cqia_mixed_r64 \
+    --port 8000
 
 
 uv run scripts/benchmark/multi_dialogue.py ; /usr/bin/shutdown
@@ -198,6 +202,7 @@ uv run scripts/train/sft_unsloth.py \
     --packing \
     --use_swanlab; shutdown
 
+
 uv run scripts/data_prep/rewrite_batch.py merge \
     -i data/rewrite_batch/dpo_pairs.json \
     -b data/rewrite_batch/batch_output.jsonl \
@@ -219,12 +224,53 @@ uv run --project . scripts/engine/build_vanilla_dpo_dataset.py \
     --proact_prompt_ratio 0 \
     --add_system_prompt_ratio 1 \
     --resume \
-    --allow_repeat_samples 2>&1 | tee outputs/logs/dpo_one_500_3can_build.log
+    --allow_repeat_samples
 
-vllm serve .cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit \
+vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
     --enable-lora \
     --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/sid_qwen14b_sft_2500 \
-    --max-model-len 4096 \
-    --gpu-memory-utilization 0.90 \
+    --lora-modules teacher_model=outputs/sid_cqia_mixed_r64 \
     --port 8000
+
+uv run scripts/benchmark/multi_dialogue.py && \
+tar -czf /root/autodl-fs/output/dialog/sid_cqia_mixed_r64.tar.gz \
+    -C /root/autodl-fs/output/dialog sid_cqia_mixed_r64 && \
+echo "✅ 压缩完成"; shutdown
+uv run scripts/train/offline_dpo_unsloth.py \
+    --dataset_repo "outputs/dpo_500_3can/interdisciplinary_multiturn.json" \
+    --output_dir "outputs/dpo_model_500_3can_opt" \
+    --model_name "outputs/sid_qwen14b_sft_2500" \
+    --learning_rate 2e-6 \
+    --per_device_train_batch_size 4 \
+    --gradient_accumulation_steps 8 \
+    --max_seq_length 4096 \
+    --num_train_epochs 3 \
+    --logging_steps 1 \
+    --eval_steps 10 \
+    --save_steps 10 \
+    --min_score_gap 0.05 \
+    --save_only_model \
+    --save_total_limit 3 \
+    --resume_ckpt_dir "outputs/dpo_model_500_3can_opt/checkpoint-80" \
+    --use_swanlab; /usr/bin/shutdown
+
+
+uv run scripts/train/offline_dpo_unsloth.py \
+    --dataset_repo "data/dpo_pairs_rewritten.json" \
+    --output_dir "outputs/dpo_model_1k_3can_rewritten_opt" \
+    --model_name "outputs/sid_qwen14b_sft_2500" \
+    --target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
+    --learning_rate 2e-6 \
+    --per_device_train_batch_size 4 \
+    --gradient_accumulation_steps 8 \
+    --max_seq_length 4096 \
+    --num_train_epochs 3 \
+    --logging_steps 1 \
+    --eval_steps 10 \
+    --save_steps 10 \
+    --save_total_limit 2 \
+    --load_best_model_at_end True \
+    --metric_for_best_model "eval_rewards/margins" \
+    --greater_is_better True \
+    --save_only_model \
+    --use_swanlab; shutdown
