@@ -150,7 +150,7 @@ uv run scripts/train/merge_warmup.py \
 vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
     --enable-lora \
     --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/sid_cqia_mixed_r64 \
+    --lora-modules teacher_model=outputs/dpo_model_1k_3can_rewritten_opt \
     --port 8000
 
 
@@ -229,12 +229,12 @@ uv run --project . scripts/engine/build_vanilla_dpo_dataset.py \
 vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
     --enable-lora \
     --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/sid_cqia_mixed_r64 \
+    --lora-modules teacher_model=outputs/dpo_model_1k_3can_rewritten_opt \
     --port 8000
 
 uv run scripts/benchmark/multi_dialogue.py && \
-tar -czf /root/autodl-fs/output/dialog/sid_cqia_mixed_r64.tar.gz \
-    -C /root/autodl-fs/output/dialog sid_cqia_mixed_r64 && \
+tar -czf /root/autodl-fs/output/dialog/dpo_model_1k_3can_rewritten_opt.tar.gz \
+    -C /root/autodl-fs/output/dialog dpo_model_1k_3can_rewritten_opt && \
 echo "✅ 压缩完成"; shutdown
 uv run scripts/train/offline_dpo_unsloth.py \
     --dataset_repo "outputs/dpo_500_3can/interdisciplinary_multiturn.json" \
@@ -261,8 +261,8 @@ uv run scripts/train/offline_dpo_unsloth.py \
     --model_name "outputs/sid_qwen14b_sft_2500" \
     --target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
     --learning_rate 2e-6 \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 8 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 16 \
     --max_seq_length 4096 \
     --num_train_epochs 3 \
     --logging_steps 1 \
