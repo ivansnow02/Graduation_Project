@@ -17,8 +17,16 @@ uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/qwen-14b/ -b d
 uv run scripts/benchmark/objective_eval.py data/final/baseline/*.jsonl    --summary-file data/metrics/baseline.json    --output-dir data/metrics/baseline_per_file_metrics
 
 ## sft
-uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/qwen-14b-sid-sft-2500/ -m qwen-flash -o data/batch/sft/batch.jsonl
+mkdir -p data/batch/dpo_model_1k_3can_rewritten_opt
+uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpo_model_1k_3can_rewritten_opt -m qwen-flash -o data/batch/dpo_model_1k_3can_rewritten_opt/batch.jsonl
 
-uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/qwen-14b-sid-sft-2500/ -b data/batchoutput/sft/sft.jsonl -o data/final/sft/
 
-uv run scripts/benchmark/objective_eval.py data/final/sft/*.jsonl    --summary-file data/metrics/sft.json    --output-dir data/metrics/sft_per_file_metrics
+mkdir -p data/final/dpo_model_1k_3can_rewritten_opt data/batchoutput/dpo_model_1k_3can_rewritten_opt
+uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpo_model_1k_3can_rewritten_opt/ -b data/batchoutput/dpo_model_1k_3can_rewritten_opt/dpo.jsonl -o data/final/dpo_model_1k_3can_rewritten_opt/
+
+
+mkdir -p data/metrics/dpo_model_1k_3can_rewritten_opt_per_file_metrics
+uv run scripts/benchmark/objective_eval.py data/final/dpo_model_1k_3can_rewritten_opt/*.jsonl    --summary-file data/metrics/dpo_model_1k_3can_rewritten_opt.json    --output-dir data/metrics/dpo_model_1k_3can_rewritten_opt_per_file_metrics
+
+
+uv run scripts/data_prep/rewrite_test.py -n 10 -m openai/qwen-plus --annotation-model openai/qwen-flash

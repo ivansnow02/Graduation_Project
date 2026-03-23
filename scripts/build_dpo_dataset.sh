@@ -202,3 +202,7 @@ uv run scripts/train/sft_unsloth.py \
     --packing \
     --use_swanlab; shutdown
 
+uv run scripts/data_prep/rewrite_batch.py merge \
+    -i data/rewrite_batch/dpo_pairs.json \
+    -b data/rewrite_batch/batch_output.jsonl \
+    -o data/rewrite_batch/dpo_pairs_rewritten.json

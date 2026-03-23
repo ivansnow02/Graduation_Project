@@ -155,9 +155,25 @@ def main() -> None:
 
     # --- 2. Load Dataset ---
     print(f"Loading dataset from {args.dataset_repo}...")
-    ds = MultiturnDataset(args.dataset_repo).to_dpo_dataset(
-        eval_ratio=args.eval_ratio, minimum_gap=args.min_score_gap
-    )
+    import json
+    from datasets import Dataset, DatasetDict
+    with open(args.dataset_repo, "r", encoding="utf-8") as f:
+        raw_data = json.load(f)
+    if "chosen" in raw_data[0]:
+        print("Detected pre-formatted DPO dataset.")
+        import random
+        full_ds = Dataset.from_list(raw_data)
+        k = int(args.eval_ratio * len(full_ds))
+        eval_idx = set(random.sample(range(len(full_ds)), k=k))
+        train_idx = [i for i in range(len(full_ds)) if i not in eval_idx]
+        ds = DatasetDict({
+            "train": full_ds.select(train_idx),
+            "eval": full_ds.select(sorted(eval_idx)),
+        })
+    else:
+        ds = MultiturnDataset(args.dataset_repo).to_dpo_dataset(
+            eval_ratio=args.eval_ratio, minimum_gap=args.min_score_gap
+        )
 
     # --- 3. Format Dataset ---
     # Helper to strip assistant prefix if template adds it
