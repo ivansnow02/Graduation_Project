@@ -210,10 +210,7 @@ def data_engine(args):
                 proact_prompt_ratio=args.proact_prompt_ratio,
                 num_candidate_responses=args.num_candidate_responses,
                 max_total_turns=args.max_total_turns,
-                max_new_turns=args.max_new_turns,
-                num_samples=args.num_samples,
                 max_workers=min(args.num_samples, 4),
-                max_metric_workers=args.max_metric_workers,
                 add_system_prompt_ratio=args.add_system_prompt_ratio,
             )
 

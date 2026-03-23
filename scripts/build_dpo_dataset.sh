@@ -147,11 +147,7 @@ uv run scripts/train/merge_warmup.py \
     --max_seq_length 4096 \
     --load_in_4bit \
     --save_method merged_16bit 2>&1 | tee outputs/logs/merge_warmup.log; shutdown
-vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
-    --enable-lora \
-    --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/dpo_model_500_3can_opt \
-    --port 8000
+
 
 
 uv run scripts/benchmark/multi_dialogue.py ; /usr/bin/shutdown
@@ -213,14 +209,22 @@ uv run --project . scripts/engine/build_vanilla_dpo_dataset.py \
     --dataset_name interdisciplinary \
     --metric_names "teaching_quality" \
     --metric_weights 1.0 \
-    --num_candidate_responses 2 \
-    --train_size 5 \
-    --output_dir outputs/vanilla_dpo_5 \
-    --user_generation_kwargs '{"model": "openai/unsloth/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://0.0.0.0:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
+    --num_candidate_responses 3 \
+    --train_size 500 \
+    --output_dir outputs/dpo_one_500_3can \
+    --user_generation_kwargs '{"model": "openai/.cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://localhost:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
     --user_prompt_file "collabllm/prompts/student_simulator.txt" \
-    --assistant_generation_kwargs '{"model": "openai/teacher_model", "base_url": "http://0.0.0.0:8000/v1", "api_key": "not-needed", "temperature": 1.0, "max_tokens": 2048}' \
-    --reward_generation_kwargs '{"model": "openai/qwen-plus"}' \
+    --assistant_generation_kwargs '{"model": "openai/teacher_model", "base_url": "http://localhost:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
+    --reward_generation_kwargs '{"model": "openai/qwen-flash",  "temperature": 0}' \
     --proact_prompt_ratio 0 \
     --add_system_prompt_ratio 1 \
     --resume \
-    --allow_repeat_samples
+    --allow_repeat_samples 2>&1 | tee outputs/logs/dpo_one_500_3can_build.log
+
+vllm serve .cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit \
+    --enable-lora \
+    --max-lora-rank 64 \
+    --lora-modules teacher_model=outputs/sid_qwen14b_sft_2500 \
+    --max-model-len 4096 \
+    --gpu-memory-utilization 0.90 \
+    --port 8000
