@@ -43,3 +43,11 @@ uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpobaseline_di
 mkdir -p data/metrics/dpobaseline_dialog_opt_2_per_file_metrics
 uv run scripts/benchmark/objective_eval.py data/final/dpobaseline_dialog_opt_2/*.jsonl    --summary-file data/metrics/dpobaseline_dialog_opt_2.json    --output-dir data/metrics/dpobaseline_dialog_opt_2_per_file_metrics
 
+
+## subjective_eval for dpobaseline_dialog_opt_2
+mkdir -p data/batch/dpobaseline_dialog_opt_2_subjective
+uv run scripts/benchmark/subjective_eval_batch.py prepare -i data/dialog/dpobaseline_dialog_opt_2 -o data/batch/dpobaseline_dialog_opt_2_subjective/batch_requests.jsonl
+
+
+mkdir -p data/final/dpobaseline_dialog_opt_2_subjective data/batchoutput/dpobaseline_dialog_opt_2_subjective
+uv run scripts/benchmark/subjective_eval_batch.py merge -i data/dialog/dpobaseline_dialog_opt_2 -b data/batchoutput/dpobaseline_dialog_opt_2_subjective/*.jsonl -o data/final/dpobaseline_dialog_opt_2_subjective
