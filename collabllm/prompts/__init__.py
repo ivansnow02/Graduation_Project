@@ -15,3 +15,12 @@ with open(osp.join(current_dir, "extract_multiturn_completion.txt"), "r") as f:
 
 with open(osp.join(current_dir, "user_simulator.txt"), "r") as f:
     USER_SIMULATOR_PROMPT = f.read()
+
+with open(osp.join(current_dir, "system_prompt_socratic_strict.txt"), "r") as f:
+    SYSTEM_PROMPT_SOCRATIC_STRICT = f.read()
+
+with open(osp.join(current_dir, "system_prompt_direct_answer.txt"), "r") as f:
+    SYSTEM_PROMPT_DIRECT_ANSWER = f.read()
+
+with open(osp.join(current_dir, "system_prompt_impatient_leaky.txt"), "r") as f:
+    SYSTEM_PROMPT_IMPATIENT_LEAKY = f.read()

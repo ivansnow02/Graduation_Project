@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dataset_repo", type=str, required=True, help="Path to dataset")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--eval_ratio", type=float, default=0.1)
-    p.add_argument("--min_score_gap", type=float, default=0.0)
+    p.add_argument("--min_score_gap", type=float, default=0.05)
 
     # Model
     p.add_argument(
@@ -205,13 +205,16 @@ def main() -> None:
         if not row["rejected"].endswith(tokenizer.eos_token):
             row["rejected"] = row["rejected"] + tokenizer.eos_token
 
+        if "margin" in row:
+            row["margin"] = float(row["margin"])
+
         return row
 
     print("Formatting dataset...")
     ds = ds.map(process, num_proc=4, load_from_cache_file=False)
 
     # --- 4. Configure Trainer ---
-    training_args = DPOConfig(
+    dpo_config_kwargs = dict(
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -227,6 +230,7 @@ def main() -> None:
         seed=42,
         output_dir=args.output_dir,
         report_to="wandb" if args.wandb_project else "none",
+        loss_type="ipo",
         beta=args.beta,
         max_length=args.max_seq_length,
         max_prompt_length=args.max_prompt_length,
@@ -241,6 +245,16 @@ def main() -> None:
         greater_is_better=args.greater_is_better,
         gradient_checkpointing=True,
     )
+
+    try:
+        training_args = DPOConfig(**dpo_config_kwargs)
+    except TypeError as exc:
+        print(
+            "Current TRL does not accept loss_type='ipo'. Falling back to default DPO loss."
+        )
+        print(f"Compatibility detail: {exc}")
+        dpo_config_kwargs.pop("loss_type", None)
+        training_args = DPOConfig(**dpo_config_kwargs)
 
     # Callbacks
     callbacks = []

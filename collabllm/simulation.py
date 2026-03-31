@@ -12,7 +12,12 @@ import torch
 from transformers import pipeline, PreTrainedModel, PreTrainedTokenizerBase
 from tqdm import tqdm
 
-from collabllm.prompts import SYSTEM_PROMPT
+from collabllm.prompts import (
+    SYSTEM_PROMPT,
+    SYSTEM_PROMPT_SOCRATIC_STRICT,
+    SYSTEM_PROMPT_DIRECT_ANSWER,
+    SYSTEM_PROMPT_IMPATIENT_LEAKY,
+)
 from collabllm import ENABLE_COLLABLLM_LOGGING
 from collabllm.prompts import COLLABLLM_TERMINATION_SIGNAL
 from collabllm.modules import LLMCollaborator, UserSimulator
@@ -205,6 +210,7 @@ class ChatSessionSimulator:
             else:
                 batch_sess = [sessions[i] for i in asst_idx]
                 if vllm_base_model is not None:
+                    batch_sess = self._inject_contrastive_system_prompts(batch_sess)
                     outs = self._batch_generate_with_vllm(
                         batch_sess,
                         vllm_base_model,
@@ -239,6 +245,31 @@ class ChatSessionSimulator:
 
         pbar.close()
         return sessions
+
+    def _inject_contrastive_system_prompts(
+        self,
+        batch_sess: List[List[Dict[str, str]]],
+    ) -> List[List[Dict[str, str]]]:
+        """Inject diverse system personas for contrastive candidate generation."""
+        persona_prompts = (
+            SYSTEM_PROMPT_SOCRATIC_STRICT,
+            SYSTEM_PROMPT_DIRECT_ANSWER,
+            SYSTEM_PROMPT_IMPATIENT_LEAKY,
+        )
+
+        injected_batch = []
+        for rank, sess in enumerate(batch_sess):
+            sess_copy = copy.deepcopy(sess)
+            persona_prompt = persona_prompts[rank % len(persona_prompts)]
+
+            if sess_copy and sess_copy[0].get("role") == "system":
+                sess_copy[0] = {"role": "system", "content": persona_prompt}
+            else:
+                sess_copy.insert(0, {"role": "system", "content": persona_prompt})
+
+            injected_batch.append(sess_copy)
+
+        return injected_batch
 
     # ------------------------------------------------------------------ #
     # Batch generators                                                   #
