@@ -388,15 +388,20 @@ class MultiturnDataset:
             if len(items) < 2:
                 continue
             items = sorted(items, key=lambda r: r["score"], reverse=True)
-            if items[0]["score"] - items[-1]["score"] < minimum_gap:
-                continue
-            pairs.append({
-                "prompt": self.sys_msg + items[0]["prompt"],
-                "chosen": items[0]["completion"],
-                "rejected": items[-1]["completion"],
-                "score_chosen": items[0]["score"],
-                "score_rejected": items[-1]["score"],
-            })
+            best = items[0]
+            for j in range(1, len(items)):
+                rejected = items[j]
+                margin = best["score"] - rejected["score"]
+                if margin < minimum_gap:
+                    continue
+                pairs.append({
+                    "prompt": self.sys_msg + best["prompt"],
+                    "chosen": best["completion"],
+                    "rejected": rejected["completion"],
+                    "score_chosen": best["score"],
+                    "score_rejected": rejected["score"],
+                    "margin": margin,
+                })
 
         logger.info(
             f"Converted {len(pairs)} pairs (minimum_gap={minimum_gap}, ratio={len(pairs) / len(self.data):.2f})"
