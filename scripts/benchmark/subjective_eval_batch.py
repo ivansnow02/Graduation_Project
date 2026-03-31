@@ -47,9 +47,7 @@ try:
         PROJECT_ROOT,
     )
 except ImportError as e:
-    print(
-        f"Warning: Could not import helper functions from subjective_eval.py: {e}"
-    )
+    print(f"Warning: Could not import helper functions from subjective_eval.py: {e}")
     print("Please ensure you are running from project root.")
     sys.exit(1)
 
@@ -191,16 +189,11 @@ def prepare_batch_file(
                     "body": body,
                 }
 
-                line_to_write = (
-                    json.dumps(request_object, ensure_ascii=False) + "\n"
-                )
+                line_to_write = json.dumps(request_object, ensure_ascii=False) + "\n"
                 line_bytes = len(line_to_write.encode("utf-8"))
 
                 # Check if we need to rotate to next file
-                if (
-                    current_file_size + line_bytes > max_bytes
-                    and current_file_size > 0
-                ):
+                if current_file_size + line_bytes > max_bytes and current_file_size > 0:
                     out_f.close()
                     current_part += 1
                     current_out_path = get_output_path(current_part)
@@ -313,9 +306,7 @@ def merge_results(
                     logging.error(f"Error parsing batch result: {e}")
                     fail_count += 1
 
-    print(
-        f"Processed {success_count} successful results, {fail_count} failed results."
-    )
+    print(f"Processed {success_count} successful results, {fail_count} failed results.")
 
     # 2. Iterate inputs and write outputs with evaluations
     files = []
@@ -358,13 +349,11 @@ def merge_results(
                 eval_result = file_results.get(idx)
                 if eval_result:
                     entry["evaluation"] = eval_result
-                    results_for_report.append(
-                        {
-                            **entry,
-                            "evaluation": eval_result,
-                            "source_file": f"topic_{idx}",
-                        }
-                    )
+                    results_for_report.append({
+                        **entry,
+                        "evaluation": eval_result,
+                        "source_file": f"topic_{idx}",
+                    })
                 else:
                     # Add empty evaluation if not found
                     entry["evaluation"] = {
@@ -421,9 +410,7 @@ def merge_results(
                 generated_reports = {}
                 for file_num, result_data in results_dict.items():
                     results = result_data.get("detailed_results", [])
-                    report_path = generate_single_report(
-                        results, file_num, ds_prefix
-                    )
+                    report_path = generate_single_report(results, file_num, ds_prefix)
                     if report_path:
                         print(f"Generated report: {report_path}")
                         # Read the generated report back
@@ -432,7 +419,9 @@ def merge_results(
                                 report_content = json.load(f)
                                 generated_reports[file_num] = report_content
                         except Exception as e:
-                            logging.error(f"Failed to read generated report {report_path}: {e}")
+                            logging.error(
+                                f"Failed to read generated report {report_path}: {e}"
+                            )
 
                 # Generate overall report from collected reports
                 if generated_reports:
@@ -453,7 +442,10 @@ def merge_results(
                             scores = []
                             for report in generated_reports.values():
                                 avg_score = report.get("average_scores", {}).get(metric)
-                                if isinstance(avg_score, (int, float)) and 1 <= avg_score <= 5:
+                                if (
+                                    isinstance(avg_score, (int, float))
+                                    and 1 <= avg_score <= 5
+                                ):
                                     scores.append(avg_score)
                             if scores:
                                 overall_avg = sum(scores) / len(scores)
