@@ -293,7 +293,7 @@ uv run --project . scripts/engine/build_dataset.py \
   --output_dir outputs/dpo_500_3can_update \
   --user_generation_kwargs '{"model": "openai/.cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://localhost:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
   --user_prompt_file "collabllm/prompts/student_simulator.txt" \
-  --assistant_generation_kwargs '{"model": "openai/teacher_model", "base_url": "http://localhost:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
+  --assistant_generation_kwargs '{"model": "openai/.cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit", "base_url": "http://localhost:8000/v1", "api_key": "not-needed", "require_json": false, "temperature": 1.0, "max_tokens": 2048}' \
   --reward_generation_kwargs '{"model": "openai/qwen-flash", "temperature": 0}' \
   --proact_prompt_ratio 0 \
   --add_system_prompt_ratio 1 \
