@@ -229,7 +229,7 @@ uv run --project . scripts/engine/build_vanilla_dpo_dataset.py \
 vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
     --enable-lora \
     --max-lora-rank 64 \
-    --lora-modules teacher_model=outputs/dpo_model_1k_3can_rewritten_opt \
+    --lora-modules teacher_model=outputs/dpobaseline_opt \
     --port 8000
 
 uv run scripts/benchmark/multi_dialogue.py && \
@@ -274,3 +274,10 @@ uv run scripts/train/offline_dpo_unsloth.py \
     --greater_is_better True \
     --save_only_model \
     --use_swanlab; shutdown
+vllm serve .cache/huggingface/hub/Qwen3-14B-unsloth-bnb-4bit \
+    --enable-lora \
+    --max-lora-rank 64 \
+    --lora-modules teacher_model=outputs/dpobaseline \
+    --max-model-len 5000 \
+    --gpu-memory-utilization 0.90 \
+    --port 8000
