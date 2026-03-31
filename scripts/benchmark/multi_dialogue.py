@@ -25,7 +25,7 @@ litellm.failure_callback = []
 litellm.callbacks = []
 
 import warnings
-
+litellm._turn_on_debug()
 # 忽略 Pydantic 序列化警告 (LiteLLM 返回对象字段不匹配问题)
 warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*")
 
@@ -89,7 +89,7 @@ def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
             api_key=api_key,
             custom_llm_provider="openai",  # 强制走 OpenAI 协议
             temperature=temperature,
-            max_tokens=4096,  # 留足空间
+            max_tokens=2048,  # 适度减小，确保 input + output 不超过 server 限制 (约 5000)
             drop_params=True,
             num_retries=3,
             # === 关键修改：尝试通过参数禁用思考 ===
