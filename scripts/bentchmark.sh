@@ -50,4 +50,4 @@ uv run scripts/benchmark/subjective_eval_batch.py prepare -i data/dialog/dpobase
 
 
 mkdir -p data/final/dpobaseline_dialog_opt_2_subjective data/batchoutput/dpobaseline_dialog_opt_2_subjective
-uv run scripts/benchmark/subjective_eval_batch.py merge -i data/dialog/dpobaseline_dialog_opt_2 -b data/batchoutput/dpobaseline_dialog_opt_2_subjective/*.jsonl -o data/final/dpobaseline_dialog_opt_2_subjective
+uv run scripts/benchmark/subjective_eval_batch.py merge -i data/dialog/dpobaseline_dialog_opt_2 -b data/batchoutput/dpobaseline_dialog_opt_2_subjective -o data/final/dpobaseline_dialog_opt_2_subjective
