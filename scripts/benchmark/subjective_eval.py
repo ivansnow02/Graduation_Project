@@ -371,8 +371,14 @@ def generate_overall_report(all_reports, dataset_prefix: str = ""):
 
             if m in report.get("score_distribution", {}):
                 for score, count in report["score_distribution"][m].items():
-                    if score in overall_summary["overall_score_distribution"][m]:
-                        overall_summary["overall_score_distribution"][m][score] += count
+                    try:
+                        score_key = int(score)
+                    except (TypeError, ValueError):
+                        continue
+                    if score_key in overall_summary["overall_score_distribution"][m]:
+                        overall_summary["overall_score_distribution"][m][score_key] += (
+                            count
+                        )
     for m in metrics:
         if overall_summary["total_dialogues"] > 0:
             overall_summary["overall_average_scores"][m] = round(

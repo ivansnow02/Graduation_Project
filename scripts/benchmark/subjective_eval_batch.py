@@ -24,6 +24,7 @@ import base64
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Any
@@ -257,6 +258,10 @@ def merge_results(
     print(f"Reading batch results from {batch_output_path}...")
     results_map = {}  # { filename: { dialogue_idx: annotations } }
 
+    def extract_file_num(name: str) -> str:
+        match = re.search(r"topic_(.+?)\.jsonl?$", name)
+        return match.group(1) if match else name
+
     batch_files = []
     if batch_file.is_dir():
         batch_files = sorted(list(batch_file.glob("*.jsonl")))
@@ -276,13 +281,15 @@ def merge_results(
                     res = json.loads(line)
                     custom_id = res.get("custom_id", "")
 
-                    parts = custom_id.split("-")
                     # Format: req-{file_id}-{dialogue_idx}
-                    if len(parts) < 3 or parts[0] != "req":
+                    # file_id is urlsafe base64 and may itself contain '-'
+                    custom_id_match = re.match(r"^req-(.+)-(\d+)$", custom_id)
+                    if not custom_id_match:
                         continue
 
-                    file_name = decode_filename(parts[1])
-                    dialogue_idx = int(parts[2])
+                    encoded_file_name = custom_id_match.group(1)
+                    file_name = decode_filename(encoded_file_name)
+                    dialogue_idx = int(custom_id_match.group(2))
 
                     response = res.get("response", {})
                     if response and response.get("status_code") == 200:
@@ -388,8 +395,10 @@ def merge_results(
                 except Exception:
                     dataset_prefix = ""
 
-                reports_by_dataset.setdefault(dataset_prefix, {})[idx] = {
-                    "file_num": idx,
+                file_num = extract_file_num(fname)
+
+                reports_by_dataset.setdefault(dataset_prefix, {})[file_num] = {
+                    "file_num": file_num,
                     "total_dialogues": len(results_for_report),
                     "average_scores": {},
                     "score_distribution": {},
