@@ -230,7 +230,7 @@ def main() -> None:
         seed=42,
         output_dir=args.output_dir,
         report_to="wandb" if args.wandb_project else "none",
-        loss_type="ipo",
+        loss_type="sigmoid",
         beta=args.beta,
         max_length=args.max_seq_length,
         max_prompt_length=args.max_prompt_length,
