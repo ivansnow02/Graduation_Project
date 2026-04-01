@@ -237,7 +237,7 @@ tar -czf /root/autodl-fs/output/dialog/dpo_model_1k_3can_rewritten_opt.tar.gz \
     -C /root/autodl-fs/output/dialog dpo_model_1k_3can_rewritten_opt && \
 echo "✅ 压缩完成"; shutdown
 uv run scripts/train/offline_dpo_unsloth.py \
-    --dataset_repo "outputs/dpo_500_3can/interdisciplinary_multiturn.json" \
+    --dataset_repo "data/dpobaseline.json" \
     --output_dir "outputs/dpo_model_500_3can_opt" \
     --model_name "outputs/sid_qwen14b_sft_2500" \
     --learning_rate 2e-6 \
@@ -256,8 +256,8 @@ uv run scripts/train/offline_dpo_unsloth.py \
 
 
 uv run scripts/train/offline_dpo_unsloth.py \
-    --dataset_repo "data/dpo_pairs_rewritten.json" \
-    --output_dir "outputs/dpo_model_1k_3can_rewritten_opt" \
+    --dataset_repo "data/dpobaseline.json" \
+    --output_dir "outputs/dpobaseline_opt" \
     --model_name "outputs/sid_qwen14b_sft_2500" \
     --target_modules "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj" \
     --learning_rate 2e-6 \
