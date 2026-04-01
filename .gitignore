@@ -36,3 +36,4 @@ run/
 xformers/
 *.json
 *.tar.gz
+*.jsonl
