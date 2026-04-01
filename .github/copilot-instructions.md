@@ -1,5 +1,6 @@
 # Copilot Instructions for CollabLLM & SID_Benchmark
 
+**I USE UV AND FISH SHELL, PLEASE FORMAT ANY COMMANDS OR CODE SNIPPETS ACCORDINGLY.**
 ## Project Overview
 
 - **CollabLLM**: Framework for training collaborative LLMs with multiturn-aware rewards. Key flows: data generation, annotation, objective/subjective evaluation, and model training.
