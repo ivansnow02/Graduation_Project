@@ -51,3 +51,28 @@ uv run scripts/benchmark/subjective_eval_batch.py prepare -i data/dialog/dpobase
 
 mkdir -p data/final/dpobaseline_dialog_opt_2_subjective data/batchoutput/dpobaseline_dialog_opt_2_subjective
 uv run scripts/benchmark/subjective_eval_batch.py merge -i data/dialog/dpobaseline_dialog_opt_2 -b data/batchoutput/dpobaseline_dialog_opt_2_subjective -o data/final/dpobaseline_dialog_opt_2_subjective
+
+## dpo soft
+mkdir -p data/batch/dpo_model_500_soft
+uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpo_model_500_soft -m qwen-flash -o data/batch/dpo_model_500_soft/batch.jsonl
+
+
+mkdir -p data/final/dpo_model_500_soft data/batchoutput/dpo_model_500_soft
+uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpo_model_500_soft/ -b data/batchoutput/dpo_model_500_soft/*.jsonl -o data/final/dpo_model_500_soft/
+
+
+mkdir -p data/metrics/dpo_model_500_soft_per_file_metrics
+uv run scripts/benchmark/objective_eval.py data/final/dpo_model_500_soft/*.jsonl    --summary-file data/metrics/dpo_model_500_soft.json    --output-dir data/metrics/dpo_model_500_soft_per_file_metrics
+
+
+# dpobaseline_soft
+mkdir -p data/batch/dpobaseline_soft
+uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpobaseline_soft -m qwen-flash -o data/batch/dpobaseline_soft/batch.jsonl
+
+
+mkdir -p data/final/dpobaseline_soft data/batchoutput/dpobaseline_soft
+uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpobaseline_soft/ -b data/batchoutput/dpobaseline_soft/*.jsonl -o data/final/dpobaseline_soft/
+
+
+mkdir -p data/metrics/dpobaseline_soft_per_file_metrics
+uv run scripts/benchmark/objective_eval.py data/final/dpobaseline_soft/*.jsonl    --summary-file data/metrics/dpobaseline_soft.json    --output-dir data/metrics/dpobaseline_soft_per_file_metrics

@@ -37,3 +37,8 @@ xformers/
 *.json
 *.tar.gz
 *.jsonl
+*.png
+node_modules/
+!package.json
+!tsconfig.json
+!web_demo/frontend/src/data/
