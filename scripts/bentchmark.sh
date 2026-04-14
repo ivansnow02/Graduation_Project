@@ -65,6 +65,8 @@ mkdir -p data/metrics/dpo_model_500_soft_per_file_metrics
 uv run scripts/benchmark/objective_eval.py data/final/dpo_model_500_soft/*.jsonl    --summary-file data/metrics/dpo_model_500_soft.json    --output-dir data/metrics/dpo_model_500_soft_per_file_metrics
 
 
+
+
 # dpobaseline_soft
 mkdir -p data/batch/dpobaseline_soft
 uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpobaseline_soft -m qwen-flash -o data/batch/dpobaseline_soft/batch.jsonl
@@ -76,3 +78,15 @@ uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpobaseline_so
 
 mkdir -p data/metrics/dpobaseline_soft_per_file_metrics
 uv run scripts/benchmark/objective_eval.py data/final/dpobaseline_soft/*.jsonl    --summary-file data/metrics/dpobaseline_soft.json    --output-dir data/metrics/dpobaseline_soft_per_file_metrics
+
+# data/dialog/dpow1
+mkdir -p data/batch/dpow1
+uv run scripts/benchmark/annotation_batch.py prepare -i data/dialog/dpow1 -m qwen-flash -o data/batch/dpow1/batch.jsonl
+
+
+mkdir -p data/final/dpow1 data/batchoutput/dpow1
+uv run scripts/benchmark/annotation_batch.py merge -i data/dialog/dpow1/ -b data/batchoutput/dpow1/*.jsonl -o data/final/dpow1/
+
+
+mkdir -p data/metrics/dpow1_per_file_metrics
+uv run scripts/benchmark/objective_eval.py data/final/dpow1/*.jsonl    --summary-file data/metrics/dpow1.json    --output-dir data/metrics/dpow1_per_file_metrics
