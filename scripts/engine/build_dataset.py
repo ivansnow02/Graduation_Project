@@ -63,7 +63,12 @@ import concurrent.futures
 from collabllm.datasets.multiturn import MultiturnDataset
 from collabllm.synthetic import generate_multiturn_dataset
 from examples.single_turn_ds import datasets_info
-from examples.metrics import *
+
+# examples.metrics now archived; teaching_quality is auto-registered by collabllm.metric.py
+try:
+    from examples.metrics import *  # noqa: F401, F403
+except ImportError:
+    pass  # Old metrics are archived; main pipeline uses teaching_quality only
 
 
 def compute_hash(text: str) -> str:

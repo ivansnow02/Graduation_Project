@@ -74,7 +74,12 @@ from peft import PeftConfig, PeftModel, LoraConfig, get_peft_model
 from collabllm.reward import multiturn_aware_reward
 from collabllm.simulation import ChatSessionSimulator
 from examples.single_turn_ds import datasets_info
-from examples.metrics import *
+
+# examples.metrics now archived; teaching_quality is auto-registered by collabllm.metric.py
+try:
+    from examples.metrics import *  # noqa: F401, F403
+except ImportError:
+    pass  # Old metrics are archived; main pipeline uses teaching_quality only
 
 logger = logging.getLogger(__name__)
 

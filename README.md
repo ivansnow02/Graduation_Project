@@ -1,86 +1,138 @@
-# CollabLLM: From Passive Responders to Active Collaborators
+# SID Learning Platform: Socratic Interdisciplinary Dialogue
+
+Train collaborative LLMs for interdisciplinary Socratic tutoring using multiturn-aware reward optimization and DPO.
 
 <div align="left">
 
-[![](https://img.shields.io/badge/Website-CollabLLM-purple?style=plastic&logo=Google%20Chrome)](http://aka.ms/CollabLLM)
-[![](https://img.shields.io/badge/Datasets_&_Models-HuggingFace-yellow?style=plastic&logo=Hugging%20Face)](https://huggingface.co/collabllm)
+[![](https://img.shields.io/badge/Framework-CollabLLM-purple?style=plastic&logo=Google%20Chrome)](https://github.com/microsoft/collabllm)
 [![](https://img.shields.io/badge/Paper-arXiv-red?style=plastic&logo=arxiv)](https://arxiv.org/pdf/2502.00640)
-[![](https://img.shields.io/badge/PyPI-collabllm-brightgreen?style=plastic&logo=Python)](https://pypi.org/project/collabllm/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
 
-📢 Oustanding Paper Award @ ICML 2025
+## Overview
 
-#### News: You can now train CollabLLM on [verl](https://verl.readthedocs.io/en/latest/algo/collabllm.html)! 😄
+This project applies the **CollabLLM** framework to train models for **Socratic Interdisciplinary Dialogue (SID)** — teaching through iterative questions that guide learners across multiple knowledge domains.
 
-# Overview
-CollabLLM transforms traditional language models from passive responders to active collaborators in multi-turn conversations. This repository provides the complete framework for computing multiturn-aware rewards and training collaborative language models.
+**Key Components:**
+- **Interdisciplinary Topics**: Cross-domain question generation with multiturn dialogue
+- **Socratic Teaching Quality**: LLM-based pedagogical annotation (8 weighted dimensions)
+- **Multiturn-Aware Rewards**: Compute interaction quality across full conversation context
+- **DPO Training**: Direct preference optimization for collaborative response generation
 
----
 ## Installation
 
-To get started, create a new environment and install `collabllm` via [pip](https://pypi.org/project/collabllm/):
-
 ```bash
-conda create -n collabllm python=3.10
-conda activate collabllm
-pip install collabllm
+conda create -n sid python=3.11
+conda activate sid
+uv pip install -e .
 ```
 
-### Optional: For distributed training
-If you need distributed training:
-
+**Optional: For distributed training**
 ```bash
-pip install deepspeed
-conda install mpi4py
+uv pip install deepspeed
 ```
-
-### Optional: For customized datasets and metrics
-You may install additional packages (e.g., `pip install bigcodebench matplotlib`) for task-specific metrics or evaluation.
 
 # Quick Start
 
-- Lightweight usage: Compute Multiturn-aware Rewards (MRs) for any model responses and construct datasets following `notebook_tutorials/`.
-- Synthetic data generation: Generating high-quality synthetic conversational data following `scripts/engine/build_dataset.py`. (Include your API keys in `.env` file)
-- Train CollabLLM: Conduct SFT/DPO models training to maximize MRs following examples under `scripts/train/*.py`.
+### 1. Setup Environment
+```bash
+cp .env.example .env
+# Fill in your API keys and model paths in .env
+```
+
+### 2. Generate Interdisciplinary Dialogue Data
+```bash
+python scripts/engine/build_dataset.py \
+    --dataset_name interdisciplinary \
+    --num_samples 500 \
+    --output_dir outputs/my_experiment/data
+```
+
+### 3. Annotate with Teaching Quality Metrics
+```bash
+python scripts/benchmark/annotation.py \
+    --input-dir outputs/my_experiment/data \
+    --output-dir outputs/my_experiment/annotated
+```
+
+### 4. Evaluate & Train
+```bash
+# Objective evaluation (quality metrics)
+python scripts/benchmark/objective_eval.py \
+    outputs/my_experiment/annotated/*.jsonl \
+    --summary-file outputs/my_experiment/metrics.json
+
+# DPO training
+python scripts/train/offline_dpo_unsloth.py \
+    --data_path outputs/my_experiment/annotated \
+    --output_dir outputs/my_experiment/models
+```
+
+## Project Structure
+
+```
+SID Learning Platform/
+├── collabllm/                      # Core framework
+│   ├── synthetic.py                # Data generation orchestration
+│   ├── simulation.py               # Chat session simulation
+│   ├── reward.py                   # Multiturn-aware reward computation
+│   ├── metrics/teaching_quality.py # Socratic teaching quality scoring
+│   └── prompts/                    # Socratic dialogue prompts
+│
+├── scripts/                        # Production pipeline
+│   ├── build_dpo_dataset.sh        # Full workflow orchestration
+│   ├── engine/build_dataset.py     # Dialogue generation
+│   ├── benchmark/
+│   │   ├── multi_dialogue.py       # Socratic dialogue generation
+│   │   ├── annotation.py           # Quality annotation
+│   │   └── objective_eval.py       # Metrics computation
+│   └── train/offline_dpo_unsloth.py # Model training
+│
+├── data/                           # Datasets
+│   ├── interdisciplinary_topic.json
+│   ├── multi_dialogue/             # Generated dialogues
+│   └── annotated/                  # Annotated conversations
+│
+└── outputs/                        # Models & results
+    └── dpo_*/                      # Experiment outputs
+```
+
+## Data Format
+
+**Input**: `data/interdisciplinary_topic.json`
+```json
+[
+  {
+    "topic": "How does photosynthesis relate to climate change?",
+    "discipline_a": "Biology",
+    "discipline_b": "Environmental Science"
+  }
+]
+```
+
+**Generated Dialogue**: Multi-turn conversation with teacher questions + student responses
+
+**Teaching Quality Metrics** (8 dimensions):
+- StrategyDensity: Question pedagogical variety
+- StrategyVariety: Strategy types covered
+- IKT: Interdisciplinary knowledge transfer
+- BloomProgression: Cognitive level progression
+- StructureCompleteness: Dialogue coherence
+- L3GuidanceRate: Effective hints/guidance
+- CognitiveCorrectionRate: Error handling quality
+- ResponseRelevance: Answer appropriateness
 
 
-## Add Your Own Task
+## Citation
 
-To apply CollabLLM to a new task:
-
-1. **Add a Dataset:**
-   Place your single-turn dataset in `examples/single_turn_ds/` and register it in `__init__.py`.
-
-2. **(Optional) Add Metrics:**
-   Add new metrics to `examples/metrics/` and register them in `__init__.py`.
-
-You can now run data generation, reward computation, and model training using your customized setup.
-
-
-# Citation
-If you find our work useful in your research, please cite the following:
+If you use this project, please cite CollabLLM:
 
 ```bibtex
 @inproceedings{collabllm2025,
     title={CollabLLM: From Passive Responders to Active Collaborators},
-    author={Shirley Wu and Michel Galley and Baolin Peng and Hao Cheng and
-            Gavin Li and Yao Dou and Weixin Cai and James Zou and
-            Jure Leskovec and Jianfeng Gao},
+    author={Shirley Wu and Michel Galley and Baolin Peng and Hao Cheng and Gavin Li and Yao Dou and Weixin Cai and James Zou and Jure Leskovec and Jianfeng Gao},
     booktitle={International Conference on Machine Learning (ICML)},
     year={2025}
 }
-```
-
-
-
-
-```shell
-vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit --enable-lora --lora-modules r1-sft=outputs/sid_qwen14b_sft_full
-
-vllm serve unsloth/Qwen3-14B-unsloth-bnb-4bit \
- --enable-lora \
- --lora-modules teacher_model=outputs/sid_qwen14b_sft_full \
- --port 8000 > run/log_teacher.txt 2>&1
 ```

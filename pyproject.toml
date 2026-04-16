@@ -16,8 +16,8 @@
         "tenacity>=9.1.2",
         "nltk>=3.9.2",
 ]
-    description="Add your description here"
-    name="graduation-project"
+    description="SID Learning Platform: Train collaborative LLMs for interdisciplinary Socratic tutoring using multiturn-aware reward optimization"
+    name="sid-learning-platform"
     readme="README.md"
     requires-python=">=3.11, <3.13"
     version="0.1.0"
