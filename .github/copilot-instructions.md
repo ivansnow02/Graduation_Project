@@ -1,7 +1,7 @@
 # Copilot Instructions — SID Learning Platform
 
-**Environment**: macOS, fish shell, uv package manager  
-**Python**: 3.11 (per `pyproject.toml`)  
+**Environment**: macOS, fish shell, uv package manager
+**Python**: 3.11 (per `pyproject.toml`)
 **GPU**: Required for annotation (vLLM) and training (DPO)
 
 ## Project Mission
@@ -10,17 +10,18 @@ Train collaborative LLMs for **Socratic Interdisciplinary Dialogue (SID)** — t
 
 ## Core Architecture
 
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| **Reward engine** | `collabllm/reward.py` | Compute multiturn-aware reward (quality of interaction across full conversation) |
-| **Dialogue simulator** | `collabllm/simulation.py` | Run ChatSessionSimulator with teacher/student roles; supports vLLM + OpenAI-compatible backends |
-| **Teaching quality** | `collabllm/metrics/teaching_quality.py` | LLM-based annotation: 8 weighted dimensions (strategy density, IKT rate, Bloom progression, etc.) |
-| **Data generation** | `scripts/engine/build_dataset.py` + `scripts/benchmark/multi_dialogue.py` | Generate multiturn dialogues from interdisciplinary topics |
-| **Annotation** | `scripts/benchmark/annotation.py` | Extract 9 structured fields per turn using vLLM (local GPU model); resumable |
-| **Evaluation** | `scripts/benchmark/objective_eval.py`, `subjective_eval.py` | Score dialogues: objective (8 metrics) + subjective (judge model) |
-| **Training** | `scripts/train/offline_dpo_unsloth.py` | DPO training using Unsloth (LoRA acceleration) + TRL trainer |
+| Component              | Location                                                                  | Purpose                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Reward engine**      | `collabllm/reward.py`                                                     | Compute multiturn-aware reward (quality of interaction across full conversation)                  |
+| **Dialogue simulator** | `collabllm/simulation.py`                                                 | Run ChatSessionSimulator with teacher/student roles; supports vLLM + OpenAI-compatible backends   |
+| **Teaching quality**   | `collabllm/metrics/teaching_quality.py`                                   | LLM-based annotation: 8 weighted dimensions (strategy density, IKT rate, Bloom progression, etc.) |
+| **Data generation**    | `scripts/engine/build_dataset.py` + `scripts/benchmark/multi_dialogue.py` | Generate multiturn dialogues from interdisciplinary topics                                        |
+| **Annotation**         | `scripts/benchmark/annotation.py`                                         | Extract 9 structured fields per turn using vLLM (local GPU model); resumable                      |
+| **Evaluation**         | `scripts/benchmark/objective_eval.py`, `subjective_eval.py`               | Score dialogues: objective (8 metrics) + subjective (judge model)                                 |
+| **Training**           | `scripts/train/offline_dpo_unsloth.py`                                    | DPO training using Unsloth (LoRA acceleration) + TRL trainer                                      |
 
 **Data Flow**:
+
 ```
 data/interdisciplinary_topic.json
     ↓ multi_dialogue.py (8 workers, OpenAI API)
@@ -34,19 +35,20 @@ data/interdisciplinary_topic.json
 
 ## Key Files & When to Edit
 
-| File | Purpose | Edit when... |
-|------|---------|--------------|
-| `collabllm/prompts/system_prompt_socratic_strict.txt` | Teacher persona & Socratic method | Changing teaching style or question strategy |
-| `collabllm/utils/metrics.py` | 8-dimension metric calculation | Adjusting weights or adding new pedagogical dimensions |
-| `scripts/benchmark/multi_dialogue.py` | Dialogue generation orchestration | Changing num_turns, num_candidates, or generation backend |
-| `scripts/benchmark/annotation.py` | vLLM-based extraction of 9 fields | Modifying structured annotation schema or extraction logic |
-| `scripts/benchmark/objective_eval.py` | Metric formulas (StrategyDensity, IKT, etc.) | Adding/removing objective metrics |
-| `scripts/train/offline_dpo_unsloth.py` | DPO training loop + hyperparameters | Tuning learning rate, LoRA rank, batch size, or output dir naming |
-| `.env` | API keys, model endpoints, paths | Setting up new backends (local vLLM, remote judge API, LM Studio) |
+| File                                                  | Purpose                                      | Edit when...                                                      |
+| ----------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------- |
+| `collabllm/prompts/system_prompt_socratic_strict.txt` | Teacher persona & Socratic method            | Changing teaching style or question strategy                      |
+| `collabllm/utils/metrics.py`                          | 8-dimension metric calculation               | Adjusting weights or adding new pedagogical dimensions            |
+| `scripts/benchmark/multi_dialogue.py`                 | Dialogue generation orchestration            | Changing num_turns, num_candidates, or generation backend         |
+| `scripts/benchmark/annotation.py`                     | vLLM-based extraction of 9 fields            | Modifying structured annotation schema or extraction logic        |
+| `scripts/benchmark/objective_eval.py`                 | Metric formulas (StrategyDensity, IKT, etc.) | Adding/removing objective metrics                                 |
+| `scripts/train/offline_dpo_unsloth.py`                | DPO training loop + hyperparameters          | Tuning learning rate, LoRA rank, batch size, or output dir naming |
+| `.env`                                                | API keys, model endpoints, paths             | Setting up new backends (local vLLM, remote judge API, LM Studio) |
 
 ## Environment Setup
 
 **Required `.env` keys**:
+
 ```bash
 # Data generation (Socratic dialogue)
 OPENAI_API_KEY="sk-..."
@@ -90,13 +92,15 @@ uv run scripts/train/offline_dpo_unsloth.py --data_path outputs/dpo_exp1/annotat
 
 ## Project Conventions
 
-**Naming**:  
+**Naming**:
+
 - Experiment directory: `outputs/dpo_<name>_<variant>/`
 - Generated dialogues: `multi_dialogue_topic_<ID>.json` (temp, can delete post-annotation)
 - Annotated data: `*.jsonl` (1 dialogue per line, +`annotations` field)
 - Trained model: `outputs/dpo_<name>_opt/` with checkpoint subdirs
 
 **Annotation format** (9 structured fields per turn):
+
 ```json
 {
   "speaker": "teacher" | "student",
@@ -112,6 +116,7 @@ uv run scripts/train/offline_dpo_unsloth.py --data_path outputs/dpo_exp1/annotat
 ```
 
 **Objective metrics** (8 dimensions, returned as weighted TotalScore):
+
 - StrategyDensity (question variety per turn)
 - StrategyVariety (types of strategies covered)
 - IKT (interdisciplinary knowledge transfer rate)
@@ -125,15 +130,15 @@ uv run scripts/train/offline_dpo_unsloth.py --data_path outputs/dpo_exp1/annotat
 
 ## Common Pitfalls
 
-| Pitfall | Fix |
-|---------|-----|
-| vLLM OOM during annotation | Reduce `max_workers` (default 4) or use smaller model (7B instead of 14B) |
-| `BASE_URL` trailing slash | Must be `http://localhost:8000/v1` not `http://localhost:8000` or `http://localhost:8000/` |
-| Judge API timeouts | Set `JUDGE_API_TIMEOUT=120` in `.env`; check `JUDGE_API_URL` connectivity |
-| Duplicate candidates in generation | Ensure `temperature=1.0` and different random seeds per candidate |
-| Annotation resumes but produces garbage | Check that model weights/tokenizer path are correct (ANNOTATION_TOKENIZER mismatch) |
-| DPO training loss stays flat | Verify `.jsonl` contains valid `annotations` field; check learning rate (3e-4 typical) |
-| Python version error | Use exactly Python 3.11 (per pyproject.toml); 3.13 not supported due to dependency conflicts |
+| Pitfall                                 | Fix                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------------------- |
+| vLLM OOM during annotation              | Reduce `max_workers` (default 4) or use smaller model (7B instead of 14B)                    |
+| `BASE_URL` trailing slash               | Must be `http://localhost:8000/v1` not `http://localhost:8000` or `http://localhost:8000/`   |
+| Judge API timeouts                      | Set `JUDGE_API_TIMEOUT=120` in `.env`; check `JUDGE_API_URL` connectivity                    |
+| Duplicate candidates in generation      | Ensure `temperature=1.0` and different random seeds per candidate                            |
+| Annotation resumes but produces garbage | Check that model weights/tokenizer path are correct (ANNOTATION_TOKENIZER mismatch)          |
+| DPO training loss stays flat            | Verify `.jsonl` contains valid `annotations` field; check learning rate (3e-4 typical)       |
+| Python version error                    | Use exactly Python 3.11 (per pyproject.toml); 3.13 not supported due to dependency conflicts |
 
 ## Adding Features
 
