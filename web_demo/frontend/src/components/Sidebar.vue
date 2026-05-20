@@ -73,7 +73,7 @@ const collapsed = ref(false)
 
 <style scoped>
 .sidebar {
-  width: 260px;
+  width: 272px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-primary);
   display: flex;
@@ -84,11 +84,11 @@ const collapsed = ref(false)
 }
 
 .sidebar.is-collapsed {
-  width: 60px;
+  width: 64px;
 }
 
 .sidebar-header {
-  padding: 12px;
+  padding: 12px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -106,9 +106,10 @@ const collapsed = ref(false)
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  min-height: 40px;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -121,9 +122,9 @@ const collapsed = ref(false)
 
 .is-collapsed .new-chat-btn {
   padding: 0;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   justify-content: center;
   border: none;
 }
@@ -133,13 +134,14 @@ const collapsed = ref(false)
 }
 
 .new-chat-btn:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--border-secondary);
 }
 
 .collapse-btn {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -152,7 +154,7 @@ const collapsed = ref(false)
 }
 
 .collapse-btn:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--text-primary);
 }
 
@@ -160,11 +162,10 @@ const collapsed = ref(false)
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding: 8px 8px 84px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-bottom: 80px; /* Spacer for absolute footer */
 }
 
 /* Scrollbar adjustment for sidebar */
@@ -183,22 +184,23 @@ const collapsed = ref(false)
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  min-height: 42px;
+  padding: 10px 11px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
   box-sizing: border-box;
   transition: all var(--transition-fast);
-  group: hover;
 }
 
 .session-item:hover {
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.055);
 }
 
 .session-item.is-active {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-primary);
 }
 
 .message-icon {
@@ -233,12 +235,12 @@ const collapsed = ref(false)
 }
 
 .delete-btn:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
+  background: rgba(243, 140, 140, 0.12);
 }
 
 .sidebar-footer {
-  padding: 12px;
+  padding: 10px;
   border-top: 1px solid var(--border-primary);
   display: flex;
   
@@ -246,8 +248,9 @@ const collapsed = ref(false)
   bottom: 0;
   left: 0;
   width: 100%;
-  background: var(--bg-secondary);
+  background: rgba(23, 23, 23, 0.94);
   z-index: 10;
+  backdrop-filter: blur(12px);
 }
 
 .settings-btn {
@@ -255,8 +258,9 @@ const collapsed = ref(false)
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 42px;
   padding: 10px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -265,7 +269,7 @@ const collapsed = ref(false)
 }
 
 .settings-btn:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.07);
   color: var(--text-primary);
 }
 

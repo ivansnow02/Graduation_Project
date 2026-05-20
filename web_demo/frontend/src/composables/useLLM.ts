@@ -72,5 +72,25 @@ export function useLLM() {
     }
   }
 
-  return { streamChat }
+  async function completeChat(
+    model: ModelConfig,
+    messages: ChatMessage[],
+    options?: { temperature?: number; maxTokens?: number },
+    signal?: AbortSignal
+  ): Promise<string> {
+    const client = createClient(model)
+    const response = await client.chat.completions.create(
+      {
+        model: model.name,
+        messages,
+        stream: false,
+        temperature: options?.temperature ?? 0.1,
+        max_tokens: options?.maxTokens ?? 2048,
+      },
+      { signal }
+    )
+    return response.choices[0]?.message?.content ?? ''
+  }
+
+  return { streamChat, completeChat }
 }

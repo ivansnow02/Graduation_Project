@@ -136,3 +136,27 @@ If you use this project, please cite CollabLLM:
     year={2025}
 }
 ```
+
+## Upload a Trained Adapter to Hugging Face
+
+If you want to publish `outputs/dpo500softmargin` to the Hub, use:
+
+```bash
+python scripts/upload_to_hub.py \
+  --repo_id your-username/dpo500softmargin
+```
+
+By default, the script uploads the top-level artifacts and skips `checkpoint-*` folders. Add `--include_checkpoints` if you want every checkpoint too. If you need to point the Hub client at a different endpoint, pass `--endpoint` explicitly.
+
+## Upload to ModelScope
+
+If you want to publish the same folder to ModelScope, install the SDK first and run:
+
+```bash
+pip install modelscope
+python scripts/upload_to_hub.py \
+  --platform modelscope \
+  --repo_id your-username/qwen3-14b-sid-margin
+```
+
+The ModelScope path uses the same local directory and skips `checkpoint-*` folders by default. Pass `--include_checkpoints` if you want to upload the full training history.
