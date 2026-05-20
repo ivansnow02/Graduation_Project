@@ -1,10 +1,10 @@
 <template>
   <div class="chat-panel" :class="[`panel-${side}`, { 'is-streaming': streaming }]">
-    <!-- Clean Minimalist Header -->
     <div class="panel-header">
       <div class="panel-label">
+        <span class="panel-dot" :class="`dot-${side}`"></span>
         <span class="model-name">{{ modelName || '未配置模型' }}</span>
-        <span class="side-badge" v-if="chatMode === 'sbs'">Model {{ side.toUpperCase() }}</span>
+        <span class="side-badge" v-if="chatMode === 'sbs'">{{ side === 'a' ? '基准模型' : '对照模型' }}</span>
       </div>
       <div class="panel-actions">
         <button v-if="promptName" class="action-text-btn" @click="$emit('openPrompt')">
@@ -18,12 +18,11 @@
       </div>
     </div>
 
-    <!-- Messages Area -->
-    <div class="messages-area" ref="messagesArea">
+    <div ref="messagesArea" class="messages-area">
       <div v-if="displayMessages.length === 0 && !streaming" class="empty-state">
-        <div class="empty-logo">⚡</div>
-        <h2>Teaching Arena</h2>
-        <p>配置模型并发送第一条消息</p>
+        <div class="empty-logo">评测</div>
+        <h2>开始一次教学对话</h2>
+        <p>配置模型与系统提示词后，输入学生问题以观察模型的教学引导行为。</p>
       </div>
 
       <div class="message-feed">
@@ -33,44 +32,74 @@
           class="message-row"
           :class="`role-${msg.role}`"
         >
-          <div v-if="msg.role === 'assistant'" class="avatar assistant-avatar">
+          <div v-if="msg.role === 'assistant'" class="avatar assistant-avatar" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2a10 10 0 1 0 10 10H12z"/><path d="M12 2a10 10 0 0 0 0 20V2z"/>
             </svg>
           </div>
-          <div class="message-bubble">
-            <div class="markdown-body" v-html="renderMarkdown(msg.content)"></div>
+          <div class="message-content">
+            <div class="message-bubble">
+              <div class="markdown-body" v-html="renderMarkdown(msg.content, msg.completed)"></div>
+              <div v-if="msg.completed" class="completion-badge">
+                <svg class="completion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                已完成
+              </div>
+            </div>
+            <div v-if="msg.annotationFields.length > 0" class="annotation-row" aria-label="客观评测 annotation">
+              <span v-for="field in msg.annotationFields" :key="field.label" class="annotation-chip">
+                <span class="annotation-label">{{ field.label }}</span>
+                <span class="annotation-value">{{ field.value }}</span>
+              </span>
+            </div>
           </div>
         </div>
 
-        <!-- Streaming message -->
         <div v-if="streaming" class="message-row role-assistant">
-          <div class="avatar assistant-avatar">
+          <div class="avatar assistant-avatar" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2a10 10 0 1 0 10 10H12z"/><path d="M12 2a10 10 0 0 0 0 20V2z"/>
             </svg>
           </div>
-          <div class="message-bubble">
-            <div v-if="streamingText" class="markdown-body" v-html="renderMarkdown(streamingText)"></div>
-            <div v-else class="typing-indicator">
-              <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <div class="message-content">
+            <div class="message-bubble">
+              <div v-if="streamingText" class="markdown-body" v-html="renderMarkdown(streamingText, isCompleted(streamingText))"></div>
+              <div v-else class="typing-indicator">
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Error -->
       <div v-if="error" class="error-banner">
         <span>出现错误：{{ error }}</span>
       </div>
+      <div ref="bottomAnchor" class="bottom-anchor"></div>
       <div class="bottom-spacer"></div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch, nextTick, ref } from 'vue'
+import { computed, watch, nextTick, ref, onMounted } from 'vue'
 import { marked } from 'marked'
+import type { ObjectiveAnnotation } from '../composables/useEvaluation'
+
+type MessageRole = 'user' | 'assistant'
+
+interface AnnotationField {
+  label: string
+  value: string
+}
+
+interface DisplayMessage {
+  role: MessageRole
+  content: string
+  completed?: boolean
+  annotationFields: AnnotationField[]
+}
 
 const props = defineProps<{
   side: string
@@ -82,88 +111,186 @@ const props = defineProps<{
   streaming: boolean
   streamingText: string
   error: string
+  annotations?: ObjectiveAnnotation[]
 }>()
 
 defineEmits<{ openPrompt: []; openModel: [] }>()
 
 const messagesArea = ref<HTMLElement | null>(null)
+const bottomAnchor = ref<HTMLElement | null>(null)
 
 marked.setOptions({ breaks: true, gfm: true })
 
-function renderMarkdown(text: string): string {
+function renderMarkdown(text: string, completed = false): string {
   if (!text) return ''
-  return marked.parse(text) as string
+  return marked.parse(toDisplayContent(text, completed)) as string
+}
+
+function stripCompletionMarker(text: string) {
+  return text.replace(/\s*\[结束\]\s*/g, '').trim()
+}
+
+function toDisplayContent(text: string, completed: boolean) {
+  const content = stripCompletionMarker(text)
+  if (content) return content
+  if (completed) return '本轮教学目标已完成。'
+  return ''
+}
+
+function isCompleted(text: string) {
+  return /\[结束\]/.test(text)
+}
+
+function compactField(label: string, value?: string): AnnotationField | null {
+  const normalized = value?.trim()
+  if (!normalized) return null
+  return { label, value: normalized }
+}
+
+function getAnnotationFields(role: MessageRole, annotation?: ObjectiveAnnotation): AnnotationField[] {
+  if (!annotation) return []
+  const fields =
+    role === 'user'
+      ? [
+          compactField('认知', annotation.student_cognition_state),
+          compactField('Bloom', annotation.cognitive_level),
+          compactField('学科', annotation.discipline),
+          compactField('迁移', annotation.discipline_transfer),
+        ]
+      : [
+          compactField('意图', annotation.teacher_intent),
+          compactField('策略', annotation.teaching_strategy),
+          compactField('引导', annotation.teacher_guidance_level),
+          compactField('学科', annotation.discipline),
+          compactField('迁移', annotation.discipline_transfer),
+          compactField('Bloom', annotation.cognitive_level),
+        ]
+  return fields.filter((field): field is AnnotationField => Boolean(field))
 }
 
 const displayMessages = computed(() => {
-  const result: { role: string; content: string }[] = []
+  const result: DisplayMessage[] = []
+  const annotations = props.annotations ?? []
+  let annotationIndex = 0
   for (let i = 0; i < props.messages.length; i++) {
     const msg = props.messages[i]
     if (msg.role === 'user') {
-      result.push({ role: 'user', content: msg.content })
-      if (props.responses[i] !== undefined) {
-        result.push({ role: 'assistant', content: props.responses[i] })
+      const response = props.responses[i]
+      const hasEvaluatedTurn = Boolean(msg.content.trim() && response?.trim())
+      const studentAnnotation = hasEvaluatedTurn ? annotations[annotationIndex] : undefined
+      const teacherAnnotation = hasEvaluatedTurn ? annotations[annotationIndex + 1] : undefined
+      result.push({
+        role: 'user',
+        content: msg.content,
+        annotationFields: getAnnotationFields('user', studentAnnotation),
+      })
+      if (response !== undefined) {
+        result.push({
+          role: 'assistant',
+          content: response,
+          completed: isCompleted(response),
+          annotationFields: getAnnotationFields('assistant', teacherAnnotation),
+        })
+        if (hasEvaluatedTurn) annotationIndex += 2
       }
     }
   }
   return result
 })
 
-watch(
-  [() => props.streamingText, () => displayMessages.value.length],
-  () => {
-    nextTick(() => {
-      if (messagesArea.value) {
-        messagesArea.value.scrollTop = messagesArea.value.scrollHeight
-      }
+function scrollToBottom() {
+  const area = messagesArea.value
+  if (!area) return
+  area.scrollTop = area.scrollHeight
+  bottomAnchor.value?.scrollIntoView({ block: 'end' })
+}
+
+function scheduleScrollToBottom() {
+  nextTick(() => {
+    scrollToBottom()
+    requestAnimationFrame(() => {
+      scrollToBottom()
+      window.setTimeout(scrollToBottom, 0)
     })
-  }
+  })
+}
+
+watch(
+  [() => props.streamingText, () => props.streaming, () => displayMessages.value.length],
+  scheduleScrollToBottom,
+  { flush: 'post' }
 )
+
+onMounted(scheduleScrollToBottom)
 </script>
 
 <style scoped>
 .chat-panel {
+  background: transparent;
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-primary);
+  min-height: 0;
+  min-width: 0;
   position: relative;
 }
 
-/* Header - Floating clean style */
 .panel-header {
+  align-items: center;
+  background: rgba(31, 31, 31, 0.74);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 10px 22px;
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--bg-primary); /* Invisible unless scrolling */
+  backdrop-filter: blur(16px);
 }
 
 .panel-label {
-  display: flex;
   align-items: center;
-  gap: 12px;
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+}
+
+.panel-dot {
+  border-radius: var(--radius-full);
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+.dot-a {
+  background: var(--accent-cyan);
+}
+
+.dot-b {
+  background: var(--accent-success);
 }
 
 .model-name {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
   color: var(--text-tertiary);
+  font-size: 0.68rem;
+  font-weight: 650;
+  padding: 3px 7px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--bg-input);
-  padding: 2px 6px;
-  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .panel-actions {
@@ -177,10 +304,15 @@ watch(
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
-  font-size: 0.8rem;
-  padding: 4px 12px;
   cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 5px 12px;
+  text-overflow: ellipsis;
   transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 .action-text-btn:hover {
   background: var(--bg-input);
@@ -188,122 +320,238 @@ watch(
 }
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
   align-items: center;
-  justify-content: center;
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
   cursor: pointer;
+  display: flex;
+  height: 32px;
+  justify-content: center;
   transition: all var(--transition-fast);
+  width: 32px;
 }
 .icon-btn:hover {
   background: var(--bg-input);
   color: var(--text-primary);
 }
 
-/* Messages Area */
 .messages-area {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px 0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 0 var(--composer-safe-area, 220px);
+  scroll-behavior: auto;
+  scroll-padding-bottom: var(--composer-safe-area, 220px);
 }
 
 .message-feed {
+  margin: 0 auto;
+  max-width: 820px;
+  padding: 0 28px;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 24px;
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
 }
 
 .empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   color: var(--text-tertiary);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  margin: auto;
+  max-width: 520px;
+  padding: 32px;
+  text-align: center;
 }
+
 .empty-logo {
-  font-size: 2.5rem;
+  align-items: center;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
+  color: #171717;
+  display: flex;
+  font-size: 0.96rem;
+  font-weight: 800;
+  height: 48px;
+  justify-content: center;
   margin-bottom: 16px;
-  opacity: 0.8;
+  width: 56px;
 }
+
 .empty-state h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
   color: var(--text-primary);
+  font-size: 1.32rem;
+  font-weight: 700;
   margin-bottom: 8px;
 }
 
-/* ChatGPT Message Styles */
+.empty-state p {
+  color: var(--text-tertiary);
+  font-size: 0.94rem;
+  line-height: 1.7;
+}
+
 .message-row {
+  animation: fadeIn 0.22s ease;
   display: flex;
-  width: 100%;
   margin-bottom: 24px;
-  animation: fadeIn 0.3s ease;
+  width: 100%;
+}
+
+.message-content {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .role-user {
   justify-content: flex-end;
 }
 
+.role-user .message-content {
+  align-items: flex-end;
+  max-width: min(78%, 680px);
+}
+
+.role-assistant .message-content {
+  flex: 1;
+}
+
 .role-assistant {
   justify-content: flex-start;
 }
 
-/* User bubbles */
 .role-user .message-bubble {
   background: var(--bg-user-bubble);
-  color: var(--text-primary);
-  padding: 12px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 20px;
-  max-width: 85%;
+  color: var(--text-primary);
   font-size: 1rem;
+  max-width: 100%;
+  padding: 11px 17px;
 }
 
-/* Assistant bubbles (virtually no bubble) */
 .role-assistant .message-bubble {
+  background: var(--bg-assistant);
   max-width: 100%;
-  padding: 4px 0;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.completion-badge {
+  align-items: center;
+  border: 1px solid rgba(143, 211, 176, 0.32);
+  border-radius: var(--radius-full);
+  color: var(--accent-success);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 3px 9px;
+}
+
+.completion-icon {
+  height: 13px;
+  width: 13px;
+}
+
+.annotation-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.role-user .annotation-row {
+  justify-content: flex-end;
+}
+
+.annotation-chip {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  display: inline-flex;
+  font-size: 0.72rem;
+  gap: 5px;
+  line-height: 1.3;
+  max-width: 100%;
+  padding: 4px 8px;
+}
+
+.annotation-label {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.annotation-value {
+  color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .avatar {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
+  align-items: center;
+  border: 1px solid var(--border-primary);
   border-radius: 50%;
   display: flex;
-  align-items: center;
+  flex-shrink: 0;
+  height: 30px;
   justify-content: center;
   margin-right: 16px;
-  border: 1px solid var(--border-primary);
-}
-.assistant-avatar {
-  background: #ffffff;
-  color: #000000;
-  border: none;
+  width: 30px;
 }
 
-/* Error */
+.assistant-avatar {
+  background: #f4f4f4;
+  border: 0;
+  color: #171717;
+}
+
 .error-banner {
+  background: rgba(243, 140, 140, 0.12);
+  border: 1px solid rgba(243, 140, 140, 0.2);
+  border-radius: var(--radius-md);
+  color: #ffc6c6;
   margin: 16px auto;
   max-width: 800px;
   padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: var(--radius-md);
-  color: #ef4444;
   font-size: 0.9rem;
 }
 
 .bottom-spacer {
-  height: 120px; /* Space for the floating input bar */
+  flex: 0 0 var(--composer-safe-area, 220px);
+}
+
+.bottom-anchor {
+  height: 1px;
+}
+
+@media (max-width: 768px) {
+  .panel-header {
+    padding: 9px 14px;
+  }
+
+  .message-feed {
+    padding: 0 16px;
+  }
+
+  .role-user .message-content {
+    max-width: 90%;
+  }
+
+  .action-text-btn {
+    max-width: 140px;
+  }
 }
 </style>

@@ -6,6 +6,7 @@
         "json-repair>=0.54.3",
         "jsonlines>=4.0.0",
         "litellm>=1.80.13",
+        "modelscope>=1.36.3",
         "nltk>=3.9.2",
         "numpy<2.2",
         "openai>=2.14.0",
@@ -15,7 +16,7 @@
         "transformers>=4.57.3",
         "unsloth>=2026.1.2",
         "xformers>=0.0.33.post2",
-    ]
+]
     description="SID Learning Platform: Train collaborative LLMs for interdisciplinary Socratic tutoring using multiturn-aware reward optimization"
     name="sid-learning-platform"
     readme="README.md"

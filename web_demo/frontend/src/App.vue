@@ -10,12 +10,14 @@
     />
     
     <div class="app">
-      <!-- Top Bar -->
       <header class="top-bar">
         <div class="logo">
-          <span class="logo-icon">⚡</span>
-          <h1>Teaching Arena</h1>
-          <span class="logo-badge">{{ chatMode === 'sbs' ? 'Side-by-Side' : 'Single Model' }}</span>
+          <span class="logo-icon">评测</span>
+          <div class="logo-copy">
+            <h1>教学对话评测系统</h1>
+            <p>面向跨学科教学对话的模型比较与指标分析环境</p>
+          </div>
+          <span class="logo-badge">{{ chatMode === 'sbs' ? '双模型对照' : '单模型评测' }}</span>
         </div>
         <div class="top-actions">
           <div class="mode-switch">
@@ -24,17 +26,16 @@
               :class="{ active: chatMode === 'single' }"
               @click="setChatMode('single')"
             >
-              单模型
+              单模型评测
             </button>
             <button 
               class="mode-btn" 
               :class="{ active: chatMode === 'sbs' }"
               @click="setChatMode('sbs')"
             >
-              Side-by-Side
+              双模型对照
             </button>
           </div>
-          <!-- Clear Chat is replaced by deleting session or making a new one, but we can keep it to clear current messages -->
           <button class="action-btn" @click="clearChat" title="清除当前内容">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -44,46 +45,56 @@
         </div>
       </header>
 
-      <!-- Main Content: Side-by-Side Panels -->
       <main class="main-content">
-        <div class="panels-container">
-          <ChatPanel
-            side="a"
-            :chat-mode="chatMode"
-            :model-name="globalModelConfig.panelA.name"
-            :prompt-name="panelA.promptName"
-            :messages="messages"
-            :responses="panelA.responses"
-            :streaming="panelA.streaming"
-            :streaming-text="panelA.streamingText"
-            :error="panelA.error"
-            @open-prompt="showPromptA = true"
-          />
-          <div class="panel-divider" v-if="chatMode === 'sbs'"></div>
-          <ChatPanel
-            v-if="chatMode === 'sbs'"
-            side="b"
-            :chat-mode="chatMode"
-            :model-name="globalModelConfig.panelB.name"
-            :prompt-name="panelB.promptName"
-            :messages="messages"
-            :responses="panelB.responses"
-            :streaming="panelB.streaming"
-            :streaming-text="panelB.streamingText"
-            :error="panelB.error"
-            @open-prompt="showPromptB = true"
+        <div class="chat-workspace">
+          <div class="panels-container">
+            <ChatPanel
+              side="a"
+              :chat-mode="chatMode"
+              :model-name="globalModelConfig.panelA.name"
+              :prompt-name="panelA.promptName"
+              :messages="messages"
+              :responses="panelA.responses"
+              :streaming="panelA.streaming"
+              :streaming-text="panelA.streamingText"
+              :error="panelA.error"
+              :annotations="chatMode === 'single' && !evaluationStale ? evaluation.result?.annotations ?? [] : []"
+              @open-prompt="showPromptA = true"
+            />
+            <div class="panel-divider" v-if="chatMode === 'sbs'"></div>
+            <ChatPanel
+              v-if="chatMode === 'sbs'"
+              side="b"
+              :chat-mode="chatMode"
+              :model-name="globalModelConfig.panelB.name"
+              :prompt-name="panelB.promptName"
+              :messages="messages"
+              :responses="panelB.responses"
+              :streaming="panelB.streaming"
+              :streaming-text="panelB.streamingText"
+              :error="panelB.error"
+              @open-prompt="showPromptB = true"
+            />
+          </div>
+          <InputBar
+            :is-streaming="panelA.streaming || panelB.streaming"
+            @send="handleSend"
+            @stop="stopStreaming"
           />
         </div>
+        <EvaluationPanel
+          v-if="chatMode === 'single'"
+          :collapsed="evaluationCollapsed"
+          :result="evaluation.result"
+          :running="evaluation.running"
+          :error="evaluation.error"
+          :stale="evaluationStale"
+          :can-run="canRunEvaluation"
+          @toggle-collapse="evaluationCollapsed = !evaluationCollapsed"
+          @run="runObjectiveEvaluation"
+        />
       </main>
 
-      <!-- Input Bar -->
-      <InputBar
-        :is-streaming="panelA.streaming || panelB.streaming"
-        @send="handleSend"
-        @stop="stopStreaming"
-      />
-
-      <!-- Modals -->
       <GlobalSettings 
         :visible="showGlobalSettings" 
         :config="globalModelConfig"
@@ -111,10 +122,12 @@ import InputBar from './components/InputBar.vue'
 import GlobalSettings from './components/GlobalSettings.vue'
 import PromptEditor from './components/PromptEditor.vue'
 import Sidebar from './components/Sidebar.vue'
+import EvaluationPanel from './components/EvaluationPanel.vue'
 
 const { 
   messages, panelA, panelB, sendMessage, stopStreaming, clearChat,
   globalModelConfig,
+  evaluation, evaluationStale, canRunEvaluation, runObjectiveEvaluation,
   chatMode, setChatMode,
   sessions, activeModeSessions, currentSessionId, createNewSession, switchSession, deleteSession
 } = useChat()
@@ -122,6 +135,7 @@ const {
 const showGlobalSettings = ref(false)
 const showPromptA = ref(false)
 const showPromptB = ref(false)
+const evaluationCollapsed = ref(false)
 
 function handleSend(content: string) {
   sendMessage(content, chatMode.value === 'sbs' ? ['a', 'b'] : ['a'])
@@ -130,6 +144,12 @@ function handleSend(content: string) {
 function saveGlobalConfig(newConfig: typeof globalModelConfig) {
   globalModelConfig.panelA = { ...newConfig.panelA }
   globalModelConfig.panelB = { ...newConfig.panelB }
+  globalModelConfig.evaluator = { ...newConfig.evaluator }
+  globalModelConfig.modelProfiles = newConfig.modelProfiles.map(profile => ({ ...profile }))
+  globalModelConfig.panelAProfileId = newConfig.panelAProfileId
+  globalModelConfig.panelBProfileId = newConfig.panelBProfileId
+  globalModelConfig.evaluatorProfileId = newConfig.evaluatorProfileId
+  globalModelConfig.generation = { ...newConfig.generation }
 }
 
 function savePromptA({ content, name }: { content: string; name: string }) {
@@ -149,77 +169,234 @@ function savePromptB({ content, name }: { content: string; name: string }) {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  background: var(--bg-primary);
 }
 
-.app { display: flex; flex-direction: column; flex: 1; min-width: 0; position: relative; }
+.app {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  background:
+    radial-gradient(circle at 50% -18%, rgba(255, 255, 255, 0.075), transparent 28%),
+    var(--bg-primary);
+}
 
 .top-bar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 24px; background: var(--bg-primary); 
-  flex-shrink: 0; z-index: 10;
+  align-items: center;
+  background: rgba(31, 31, 31, 0.84);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  min-height: 66px;
+  padding: 12px 24px;
+  z-index: 20;
+  backdrop-filter: blur(18px);
 }
-.logo { display: flex; align-items: center; gap: 8px; cursor: default; }
-.logo-icon { font-size: 1.25rem; font-weight: 500; }
+
+.logo {
+  align-items: center;
+  cursor: default;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.logo-icon {
+  align-items: center;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-sm);
+  color: #191919;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+  letter-spacing: 0;
+  width: 42px;
+}
+
+.logo-copy {
+  min-width: 0;
+}
+
 .logo h1 {
-  font-size: 1.1rem; font-weight: 600;
   color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.2;
 }
+
+.logo-copy p {
+  color: var(--text-tertiary);
+  font-size: 0.76rem;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
 .logo-badge {
-  padding: 2px 6px; border-radius: 4px;
-  background: var(--bg-input); 
-  color: var(--text-secondary); font-size: 0.65rem; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0;
   margin-left: 4px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-.top-actions { display: flex; gap: 8px; }
+
+.top-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
 .action-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 14px; border-radius: var(--radius-sm);
-  background: transparent; border: none;
-  color: var(--text-secondary); font-family: var(--font-sans);
-  font-size: 0.85rem; cursor: pointer; transition: all var(--transition-fast);
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 12px;
+  transition: all var(--transition-fast);
 }
+
 .action-btn:hover {
-  color: var(--text-primary);
   background: var(--bg-input);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
 }
 
 .mode-switch {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
   display: flex;
-  background: var(--bg-input);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  margin-right: 12px;
+  gap: 2px;
+  padding: 3px;
 }
+
 .mode-btn {
-  padding: 6px 12px;
   background: transparent;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-family: var(--font-sans);
   cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.84rem;
+  min-height: 32px;
+  padding: 6px 12px;
   transition: all var(--transition-fast);
+  white-space: nowrap;
 }
+
 .mode-btn:hover {
   color: var(--text-primary);
 }
+
 .mode-btn.active {
-  background: var(--border-primary);
-  color: var(--text-primary);
-  font-weight: 500;
+  background: #f2f2f2;
   box-shadow: var(--shadow-sm);
+  color: #1d1d1d;
+  font-weight: 650;
 }
 
-.main-content { flex: 1; overflow: hidden; }
-.panels-container { display: flex; gap: 0; height: 100%; }
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-workspace {
+  --composer-safe-area: 220px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.panels-container {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
 .panels-container > :first-child,
-.panels-container > :last-child { flex: 1; min-width: 0; }
-.panel-divider { width: 1px; background: var(--bg-divider); flex-shrink: 0; }
+.panels-container > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-divider {
+  background: var(--bg-divider);
+  flex-shrink: 0;
+  width: 1px;
+}
+
+@media (max-width: 920px) {
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .top-actions {
+    width: 100%;
+  }
+
+  .mode-switch {
+    flex: 1;
+  }
+
+  .mode-btn {
+    flex: 1;
+  }
+
+  .action-btn {
+    padding-inline: 10px;
+  }
+}
 
 @media (max-width: 768px) {
-  .panels-container { flex-direction: column; gap: 8px; }
-  .panel-divider { width: 100%; height: 1px; margin: 0; }
+  .logo-copy p,
+  .logo-badge {
+    display: none;
+  }
+
+  .main-content {
+    flex-direction: column;
+  }
+
+  .panels-container {
+    flex-direction: column;
+  }
+
+  .chat-workspace {
+    min-height: 0;
+    --composer-safe-area: 200px;
+  }
+
+  .panel-divider {
+    height: 1px;
+    width: 100%;
+  }
 }
 </style>
