@@ -14,8 +14,8 @@
         <div class="logo">
           <span class="logo-icon">评测</span>
           <div class="logo-copy">
-            <h1>教学对话评测系统</h1>
-            <p>面向跨学科教学对话的模型比较与指标分析环境</p>
+            <h1>基于主动协作机制的苏格拉底式教学对话评测系统</h1>
+            <p>面向苏格拉底式教学对话模型的客观评测与指标分析环境</p>
           </div>
           <span class="logo-badge">{{ chatMode === 'sbs' ? '双模型对照' : '单模型评测' }}</span>
         </div>
@@ -220,6 +220,7 @@ function savePromptB({ content, name }: { content: string; name: string }) {
 }
 
 .logo-copy {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -228,6 +229,8 @@ function savePromptB({ content, name }: { content: string; name: string }) {
   font-size: 1rem;
   font-weight: 650;
   line-height: 1.2;
+  max-width: min(46vw, 520px);
+  overflow-wrap: anywhere;
 }
 
 .logo-copy p {
