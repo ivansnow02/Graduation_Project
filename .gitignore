@@ -43,3 +43,4 @@ node_modules/
 !tsconfig.json
 !web_demo/frontend/src/data/
 docs/
+.vercel

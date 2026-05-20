@@ -5,7 +5,7 @@
         ref="inputRef"
         v-model="inputText"
         class="composer-input"
-        placeholder="输入学生问题或教学情境..."
+        placeholder="输入学生问题..."
         rows="1"
         @keydown.enter.exact="handleSend"
         @input="autoResize"
