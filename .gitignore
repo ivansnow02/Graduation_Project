@@ -44,3 +44,4 @@ node_modules/
 !web_demo/frontend/src/data/
 docs/
 .vercel
+llama.cpp/

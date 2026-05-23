@@ -18,6 +18,15 @@ export interface ObjectiveAnnotation {
   cognitive_level?: string
 }
 
+export type AnnotationFieldKey =
+  | 'teacher_intent'
+  | 'teaching_strategy'
+  | 'discipline'
+  | 'discipline_transfer'
+  | 'student_cognition_state'
+  | 'teacher_guidance_level'
+  | 'cognitive_level'
+
 export interface MetricEntry {
   score: number
   display: string
@@ -42,10 +51,34 @@ export interface EvaluationRecord {
   modelName: string
   dialogue: DialogueTurn[]
   annotations: ObjectiveAnnotation[]
+  originalAnnotations: ObjectiveAnnotation[]
   metrics: ObjectiveMetrics
 }
 
-const TOTAL_POSSIBLE_STRATEGIES = 8
+export const TEACHER_INTENT_OPTIONS = ['引出概念', '检测理解', '引导推理', '引发迁移', '总结提升'] as const
+export const DISCIPLINE_TRANSFER_OPTIONS = ['是', '否'] as const
+export const STUDENT_COGNITION_STATE_OPTIONS = [
+  '清晰理解',
+  '模糊理解',
+  '表达困难',
+  '答非所问',
+  '错误回答',
+  '高阶思考',
+] as const
+export const TEACHER_GUIDANCE_LEVEL_OPTIONS = ['L1', 'L2', 'L3'] as const
+export const COGNITIVE_LEVEL_OPTIONS = ['记忆', '理解', '应用', '分析', '评价', '创造'] as const
+export const TEACHING_STRATEGY_OPTIONS = [
+  '情境设问',
+  '追问',
+  '类比',
+  '提示',
+  '拆解问题',
+  '鼓励回应',
+  '正误反馈',
+  '引导推理',
+] as const
+
+const TOTAL_POSSIBLE_STRATEGIES = TEACHING_STRATEGY_OPTIONS.length
 const REQUIRED_INTENTS = new Set(['引出概念', '引导推理', '引发迁移', '总结提升'])
 const BLOOM_MAP: Record<string, number> = {
   记忆: 1,
@@ -68,6 +101,18 @@ function stableHash(value: unknown): string {
     hash = (hash * 31 + text.charCodeAt(i)) | 0
   }
   return Math.abs(hash).toString(36)
+}
+
+export function cloneAnnotations(annotations: ObjectiveAnnotation[]): ObjectiveAnnotation[] {
+  return annotations.map((annotation) => ({ ...annotation }))
+}
+
+function splitListValue(value?: string): string[] {
+  return (value ?? '')
+    .replace(/，/g, ',')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 export function buildEvaluationDialogue(
@@ -103,7 +148,7 @@ export function calculateObjectiveMetrics(annotations: ObjectiveAnnotation[]): O
 
   const usedStrategies = new Set(
     teacherUtterances
-      .map((ann) => ann.teaching_strategy?.trim())
+      .flatMap((ann) => splitListValue(ann.teaching_strategy))
       .filter((strategy): strategy is string => Boolean(strategy))
   )
   const strategyVariety = TOTAL_POSSIBLE_STRATEGIES > 0 ? usedStrategies.size / TOTAL_POSSIBLE_STRATEGIES : 0
@@ -181,7 +226,7 @@ function buildAnnotationPrompt(dialogue: DialogueTurn[]): string {
 - speaker：发言者（"教师"或"学生"）
 - utterance：原始发言文本，不能进行任何修改
 - teacher_intent：教师发言中体现的教学目的，有以下五种："引出概念"、"检测理解"、"引导推理"、"引发迁移"、"总结提升"，学生轮为空字符串
-- teaching_strategy：教师采用的策略，如"追问"、"提示"、"类比"、"情境设问"、"拆解问题"、"鼓励回应"、"正误反馈"等，学生轮为空字符串
+- teaching_strategy：教师采用的策略，请从"情境设问"、"追问"、"类比"、"提示"、"拆解问题"、"鼓励回应"、"正误反馈"、"引导推理"中选择；多个策略用逗号分隔，学生轮为空字符串
 - discipline：该轮涉及的学科，如"地理"、"生物"、"物理"、"历史"，多个学科请用逗号分隔
 - discipline_transfer：若当前轮相较上轮出现新的学科，引导学科间联系，请填"是"，否则填"否"
 - student_cognition_state：仅学生轮填写，有以下几种："清晰理解"、"模糊理解"、"表达困难"、"答非所问"、"错误回答"、"高阶思考"；教师轮为空字符串
@@ -260,6 +305,7 @@ export function useEvaluation() {
       modelName: model.name,
       dialogue,
       annotations,
+      originalAnnotations: cloneAnnotations(annotations),
       metrics,
     }
   }

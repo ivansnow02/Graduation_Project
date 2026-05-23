@@ -59,7 +59,10 @@
               :streaming-text="panelA.streamingText"
               :error="panelA.error"
               :annotations="chatMode === 'single' && !evaluationStale ? evaluation.result?.annotations ?? [] : []"
+              :selected-annotation-index="selectedAnnotation.index"
+              :selected-annotation-field="selectedAnnotation.field"
               @open-prompt="showPromptA = true"
+              @select-annotation="handleSelectAnnotation"
             />
             <div class="panel-divider" v-if="chatMode === 'sbs'"></div>
             <ChatPanel
@@ -90,8 +93,15 @@
           :error="evaluation.error"
           :stale="evaluationStale"
           :can-run="canRunEvaluation"
+          :can-export="canExportEvaluation"
+          :selected-index="selectedAnnotation.index"
+          :selected-field="selectedAnnotation.field"
           @toggle-collapse="evaluationCollapsed = !evaluationCollapsed"
           @run="runObjectiveEvaluation"
+          @select-annotation="selectAnnotation"
+          @update-annotation="updateAnnotation"
+          @reset-annotations="resetEditedAnnotations"
+          @export-annotations="exportEvaluationJsonl"
         />
       </main>
 
@@ -117,6 +127,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useChat } from './composables/useChat'
+import type { AnnotationFieldKey } from './composables/useEvaluation'
 import ChatPanel from './components/ChatPanel.vue'
 import InputBar from './components/InputBar.vue'
 import GlobalSettings from './components/GlobalSettings.vue'
@@ -127,7 +138,8 @@ import EvaluationPanel from './components/EvaluationPanel.vue'
 const { 
   messages, panelA, panelB, sendMessage, stopStreaming, clearChat,
   globalModelConfig,
-  evaluation, evaluationStale, canRunEvaluation, runObjectiveEvaluation,
+  evaluation, evaluationStale, canRunEvaluation, canExportEvaluation, runObjectiveEvaluation,
+  selectedAnnotation, selectAnnotation, updateAnnotation, resetEditedAnnotations, exportEvaluationJsonl,
   chatMode, setChatMode,
   sessions, activeModeSessions, currentSessionId, createNewSession, switchSession, deleteSession
 } = useChat()
@@ -139,6 +151,11 @@ const evaluationCollapsed = ref(false)
 
 function handleSend(content: string) {
   sendMessage(content, chatMode.value === 'sbs' ? ['a', 'b'] : ['a'])
+}
+
+function handleSelectAnnotation(index: number, field: AnnotationFieldKey) {
+  evaluationCollapsed.value = false
+  selectAnnotation(index, field)
 }
 
 function saveGlobalConfig(newConfig: typeof globalModelConfig) {

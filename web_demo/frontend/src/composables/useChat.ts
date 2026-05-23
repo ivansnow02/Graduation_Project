@@ -2,8 +2,12 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useLLM, type ModelConfig, type ChatMessage } from './useLLM'
 import {
   buildEvaluationDialogue,
+  calculateObjectiveMetrics,
+  cloneAnnotations,
   createEvaluationSourceHash,
   useEvaluation,
+  type AnnotationFieldKey,
+  type ObjectiveAnnotation,
   type EvaluationRecord,
 } from './useEvaluation'
 import { presetPrompts } from '../data/presets'
@@ -29,6 +33,11 @@ export interface ChatSession {
   panelA: { systemPrompt: string; promptName: string; responses: Record<number, string> }
   panelB: { systemPrompt: string; promptName: string; responses: Record<number, string> }
   evaluation?: EvaluationRecord
+}
+
+export interface AnnotationSelection {
+  index: number
+  field: AnnotationFieldKey | null
 }
 
 export interface GlobalModelConfig {
@@ -59,6 +68,31 @@ function generateId() {
 
 function hasModelConfig(model: ModelConfig) {
   return Boolean(model.name && model.apiKey && model.baseUrl)
+}
+
+function buildTimestampToken(timestamp: number) {
+  const date = new Date(timestamp)
+  const parts = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0'),
+  ]
+  return `${parts[0]}${parts[1]}${parts[2]}-${parts[3]}${parts[4]}${parts[5]}`
+}
+
+function downloadTextFile(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'application/jsonl;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 export function containsCompletionMarker(text: string) {
@@ -110,6 +144,10 @@ export function useChat() {
     error: '',
     result: null,
   })
+  const selectedAnnotation = reactive<AnnotationSelection>({
+    index: -1,
+    field: null,
+  })
 
   // Computed list of sessions for current mode
   const activeModeSessions = computed(() => {
@@ -130,6 +168,12 @@ export function useChat() {
       !panelA.streaming &&
       !panelB.streaming &&
       evaluationDialogue.value.length >= 2
+  })
+  const canExportEvaluation = computed(() => {
+    return chatMode.value === 'single' &&
+      !evaluation.running &&
+      Boolean(evaluation.result) &&
+      !evaluationStale.value
   })
   const panelACompleted = computed(() => Object.values(panelA.responses).some(containsCompletionMarker))
   const panelBCompleted = computed(() => Object.values(panelB.responses).some(containsCompletionMarker))
@@ -166,6 +210,8 @@ export function useChat() {
     evaluation.running = false
     evaluation.error = ''
     evaluation.result = null
+    selectedAnnotation.index = -1
+    selectedAnnotation.field = null
   }
 
   function sessionHasChat(session: ChatSession) {
@@ -424,6 +470,8 @@ export function useChat() {
     evaluation.running = false
     evaluation.error = ''
     evaluation.result = session.evaluation ?? null
+    selectedAnnotation.index = session.evaluation?.annotations?.length ? 0 : -1
+    selectedAnnotation.field = null
   }
 
   function deleteSession(id: string) {
@@ -456,6 +504,21 @@ export function useChat() {
     ],
     () => saveSessionsToStorage(),
     { deep: true }
+  )
+
+  watch(
+    () => evaluation.result?.annotations.length ?? 0,
+    (annotationCount) => {
+      if (annotationCount === 0) {
+        selectedAnnotation.index = -1
+        selectedAnnotation.field = null
+        return
+      }
+      if (selectedAnnotation.index < 0 || selectedAnnotation.index >= annotationCount) {
+        selectedAnnotation.index = 0
+        selectedAnnotation.field = null
+      }
+    }
   )
 
 
@@ -573,6 +636,8 @@ export function useChat() {
     messages.value = []
     evaluation.result = null
     evaluation.error = ''
+    selectedAnnotation.index = -1
+    selectedAnnotation.field = null
     for (const panel of [panelA, panelB]) {
       panel.responses = {}
       panel.streamingText = ''
@@ -607,6 +672,8 @@ export function useChat() {
     evaluation.error = ''
     try {
       evaluation.result = await evaluateDialogue(globalModelConfig.evaluator, dialogue, sourceHash)
+      selectedAnnotation.index = evaluation.result.annotations.length > 0 ? 0 : -1
+      selectedAnnotation.field = null
       saveSessionsToStorage()
     } catch (err: any) {
       evaluation.error = err?.message || String(err)
@@ -615,10 +682,83 @@ export function useChat() {
     }
   }
 
+  function selectAnnotation(index: number, field: AnnotationFieldKey | null = null) {
+    const annotations = evaluation.result?.annotations ?? []
+    if (index < 0 || index >= annotations.length) return
+    selectedAnnotation.index = index
+    selectedAnnotation.field = field
+  }
+
+  function updateAnnotation(index: number, patch: Partial<ObjectiveAnnotation>) {
+    if (!evaluation.result) return
+    const existing = evaluation.result.annotations[index]
+    if (!existing) return
+
+    const nextAnnotations = cloneAnnotations(evaluation.result.annotations)
+    nextAnnotations[index] = {
+      ...existing,
+      ...patch,
+      speaker: existing.speaker,
+      utterance: existing.utterance,
+    }
+
+    const nextMetrics = calculateObjectiveMetrics(nextAnnotations)
+    if (!nextMetrics) return
+
+    evaluation.result = {
+      ...evaluation.result,
+      annotations: nextAnnotations,
+      metrics: nextMetrics,
+    }
+  }
+
+  function resetEditedAnnotations() {
+    if (!evaluation.result) return
+
+    const baseline = evaluation.result.originalAnnotations?.length
+      ? cloneAnnotations(evaluation.result.originalAnnotations)
+      : cloneAnnotations(evaluation.result.annotations)
+    const baselineMetrics = calculateObjectiveMetrics(baseline)
+    if (!baselineMetrics) return
+
+    evaluation.result = {
+      ...evaluation.result,
+      annotations: baseline,
+      metrics: baselineMetrics,
+    }
+  }
+
+  function exportEvaluationJsonl() {
+    if (!evaluation.result || evaluationStale.value) return
+
+    const sessionId = currentSessionId.value || evaluation.result.dialogueId
+    const sessionTitle = messages.value[0]?.content?.trim() || 'web_demo_session'
+    const payload = {
+      student_id: sessionId,
+      student_type: '',
+      scenario: 'web_demo_single_model',
+      topic_id: sessionId,
+      topic_text: sessionTitle,
+      repeat_id: 'web_demo',
+      dialogue: evaluation.result.dialogue.map((turn) => ({
+        role: turn.role,
+        content: turn.content,
+      })),
+      annotations: evaluation.result.annotations,
+      quality_score: evaluation.result.metrics.TotalScore.score,
+    }
+
+    downloadTextFile(
+      `${JSON.stringify(payload)}\n`,
+      `webdemo-annotation-${sessionId}-${buildTimestampToken(Date.now())}.jsonl`
+    )
+  }
+
   return {
     messages, panelA, panelB, sendMessage, stopStreaming, clearChat,
     globalModelConfig,
-    evaluation, evaluationDialogue, evaluationSourceHash, evaluationStale, canRunEvaluation, runObjectiveEvaluation,
+    evaluation, evaluationDialogue, evaluationSourceHash, evaluationStale, canRunEvaluation, canExportEvaluation, runObjectiveEvaluation,
+    selectedAnnotation, selectAnnotation, updateAnnotation, resetEditedAnnotations, exportEvaluationJsonl,
     panelACompleted, panelBCompleted, isDialogueCompleted,
     modelProfiles: computed(() => globalModelConfig.modelProfiles),
     createModelProfile, updateModelProfile, deleteModelProfile, selectModelProfile,

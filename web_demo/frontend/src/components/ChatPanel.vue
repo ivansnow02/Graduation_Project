@@ -47,11 +47,22 @@
                 已完成
               </div>
             </div>
-            <div v-if="msg.annotationFields.length > 0" class="annotation-row" aria-label="客观评测 annotation">
-              <span v-for="field in msg.annotationFields" :key="field.label" class="annotation-chip">
+            <div
+              v-if="msg.annotationFields.length > 0"
+              class="annotation-row"
+              :class="{ selected: msg.annotationIndex === selectedAnnotationIndex }"
+              aria-label="客观评测 annotation"
+            >
+              <button
+                v-for="field in msg.annotationFields"
+                :key="`${field.key}-${field.label}`"
+                class="annotation-chip"
+                :class="{ selected: msg.annotationIndex === selectedAnnotationIndex && selectedAnnotationField === field.key }"
+                @click="$emit('selectAnnotation', msg.annotationIndex, field.key)"
+              >
                 <span class="annotation-label">{{ field.label }}</span>
                 <span class="annotation-value">{{ field.value }}</span>
-              </span>
+              </button>
             </div>
           </div>
         </div>
@@ -85,11 +96,12 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref, onMounted } from 'vue'
 import { marked } from 'marked'
-import type { ObjectiveAnnotation } from '../composables/useEvaluation'
+import type { AnnotationFieldKey, ObjectiveAnnotation } from '../composables/useEvaluation'
 
 type MessageRole = 'user' | 'assistant'
 
 interface AnnotationField {
+  key: AnnotationFieldKey
   label: string
   value: string
 }
@@ -98,6 +110,7 @@ interface DisplayMessage {
   role: MessageRole
   content: string
   completed?: boolean
+  annotationIndex: number
   annotationFields: AnnotationField[]
 }
 
@@ -112,9 +125,15 @@ const props = defineProps<{
   streamingText: string
   error: string
   annotations?: ObjectiveAnnotation[]
+  selectedAnnotationIndex?: number
+  selectedAnnotationField?: AnnotationFieldKey | null
 }>()
 
-defineEmits<{ openPrompt: []; openModel: [] }>()
+defineEmits<{
+  openPrompt: []
+  openModel: []
+  selectAnnotation: [index: number, field: AnnotationFieldKey]
+}>()
 
 const messagesArea = ref<HTMLElement | null>(null)
 const bottomAnchor = ref<HTMLElement | null>(null)
@@ -141,10 +160,10 @@ function isCompleted(text: string) {
   return /\[结束\]/.test(text)
 }
 
-function compactField(label: string, value?: string): AnnotationField | null {
+function compactField(key: AnnotationFieldKey, label: string, value?: string): AnnotationField | null {
   const normalized = value?.trim()
   if (!normalized) return null
-  return { label, value: normalized }
+  return { key, label, value: normalized }
 }
 
 function getAnnotationFields(role: MessageRole, annotation?: ObjectiveAnnotation): AnnotationField[] {
@@ -152,18 +171,18 @@ function getAnnotationFields(role: MessageRole, annotation?: ObjectiveAnnotation
   const fields =
     role === 'user'
       ? [
-          compactField('认知', annotation.student_cognition_state),
-          compactField('Bloom', annotation.cognitive_level),
-          compactField('学科', annotation.discipline),
-          compactField('迁移', annotation.discipline_transfer),
+          compactField('student_cognition_state', '认知', annotation.student_cognition_state),
+          compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
+          compactField('discipline', '学科', annotation.discipline),
+          compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
         ]
       : [
-          compactField('意图', annotation.teacher_intent),
-          compactField('策略', annotation.teaching_strategy),
-          compactField('引导', annotation.teacher_guidance_level),
-          compactField('学科', annotation.discipline),
-          compactField('迁移', annotation.discipline_transfer),
-          compactField('Bloom', annotation.cognitive_level),
+          compactField('teacher_intent', '意图', annotation.teacher_intent),
+          compactField('teaching_strategy', '策略', annotation.teaching_strategy),
+          compactField('teacher_guidance_level', '引导', annotation.teacher_guidance_level),
+          compactField('discipline', '学科', annotation.discipline),
+          compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
+          compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
         ]
   return fields.filter((field): field is AnnotationField => Boolean(field))
 }
@@ -182,6 +201,7 @@ const displayMessages = computed(() => {
       result.push({
         role: 'user',
         content: msg.content,
+        annotationIndex: hasEvaluatedTurn ? annotationIndex : -1,
         annotationFields: getAnnotationFields('user', studentAnnotation),
       })
       if (response !== undefined) {
@@ -189,6 +209,7 @@ const displayMessages = computed(() => {
           role: 'assistant',
           content: response,
           completed: isCompleted(response),
+          annotationIndex: hasEvaluatedTurn ? annotationIndex + 1 : -1,
           annotationFields: getAnnotationFields('assistant', teacherAnnotation),
         })
         if (hasEvaluatedTurn) annotationIndex += 2
@@ -475,18 +496,34 @@ onMounted(scheduleScrollToBottom)
   justify-content: flex-end;
 }
 
+.annotation-row.selected {
+  filter: brightness(1.04);
+}
+
 .annotation-chip {
   align-items: center;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-full);
   color: var(--text-secondary);
+  cursor: pointer;
   display: inline-flex;
   font-size: 0.72rem;
   gap: 5px;
   line-height: 1.3;
   max-width: 100%;
   padding: 4px 8px;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.annotation-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.annotation-chip.selected {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .annotation-label {

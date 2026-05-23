@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
-import type { EvaluationRecord } from '../composables/useEvaluation'
+import { computed } from 'vue'
+import AnnotationEditor from './AnnotationEditor.vue'
+import type { AnnotationFieldKey, EvaluationRecord, ObjectiveAnnotation } from '../composables/useEvaluation'
 
 const props = defineProps<{
   collapsed: boolean
@@ -9,14 +10,19 @@ const props = defineProps<{
   error: string
   stale: boolean
   canRun: boolean
+  canExport: boolean
+  selectedIndex: number
+  selectedField: AnnotationFieldKey | null
 }>()
 
 defineEmits<{
   run: []
   toggleCollapse: []
+  selectAnnotation: [index: number, field: AnnotationFieldKey | null]
+  updateAnnotation: [index: number, patch: Partial<ObjectiveAnnotation>]
+  resetAnnotations: []
+  exportAnnotations: []
 }>()
-
-const showAnnotations = shallowRef(false)
 
 const metricRows = computed(() => {
   if (!props.result) return []
@@ -102,11 +108,17 @@ const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?
           </div>
         </div>
 
-        <button class="annotations-toggle" @click="showAnnotations = !showAnnotations">
-          {{ showAnnotations ? '收起 annotations' : '查看 annotations' }}
-        </button>
-
-        <pre v-if="showAnnotations" class="annotations-json">{{ JSON.stringify(result.annotations, null, 2) }}</pre>
+        <AnnotationEditor
+          :annotations="result.annotations"
+          :selected-index="selectedIndex"
+          :selected-field="selectedField"
+          :stale="stale"
+          :can-export="canExport"
+          @select="(index, field) => $emit('selectAnnotation', index, field)"
+          @update="(index, patch) => $emit('updateAnnotation', index, patch)"
+          @reset="$emit('resetAnnotations')"
+          @export="$emit('exportAnnotations')"
+        />
       </template>
     </template>
   </aside>
@@ -323,36 +335,6 @@ const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?
   color: var(--text-tertiary);
   font-family: var(--font-sans);
   font-size: 0.68rem;
-}
-
-.annotations-toggle {
-  width: 100%;
-  border: 1px solid var(--border-primary);
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  margin-top: 14px;
-  padding: 8px 10px;
-}
-
-.annotations-toggle:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-}
-
-.annotations-json {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: #000000;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  line-height: 1.5;
-  overflow-x: auto;
-  white-space: pre-wrap;
 }
 
 @media (max-width: 980px) {
