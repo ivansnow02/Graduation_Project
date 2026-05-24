@@ -1,14 +1,8 @@
 <template>
   <div class="layout-wrapper">
-    <Sidebar 
-      :sessions="activeModeSessions" 
-      :current-id="currentSessionId" 
-      @new="createNewSession"
-      @switch="switchSession"
-      @delete="deleteSession"
-      @open-settings="showGlobalSettings = true"
-    />
-    
+    <Sidebar :sessions="activeModeSessions" :current-id="currentSessionId" @new="createNewSession"
+      @switch="switchSession" @delete="deleteSession" @open-settings="showGlobalSettings = true" />
+
     <div class="app">
       <header class="top-bar">
         <div class="logo">
@@ -21,24 +15,17 @@
         </div>
         <div class="top-actions">
           <div class="mode-switch">
-            <button 
-              class="mode-btn" 
-              :class="{ active: chatMode === 'single' }"
-              @click="setChatMode('single')"
-            >
+            <button class="mode-btn" :class="{ active: chatMode === 'single' }" @click="setChatMode('single')">
               单模型评测
             </button>
-            <button 
-              class="mode-btn" 
-              :class="{ active: chatMode === 'sbs' }"
-              @click="setChatMode('sbs')"
-            >
+            <button class="mode-btn" :class="{ active: chatMode === 'sbs' }" @click="setChatMode('sbs')">
               双模型对照
             </button>
           </div>
           <button class="action-btn" @click="clearChat" title="清除当前内容">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
             重置
           </button>
@@ -48,135 +35,95 @@
       <main class="main-content">
         <div class="chat-workspace">
           <div class="panels-container">
-            <ChatPanel
-              side="a"
-              :chat-mode="chatMode"
-              :model-name="globalModelConfig.panelA.name"
-              :prompt-name="panelA.promptName"
-              :messages="messages"
-              :responses="panelA.responses"
-              :streaming="panelA.streaming"
-              :streaming-text="panelA.streamingText"
-              :error="panelA.error"
+            <ChatPanel side="a" :chat-mode="chatMode" :model-name="globalModelConfig.panelA.name"
+              :prompt-name="panelA.promptName" :messages="messages" :responses="panelA.responses"
+              :streaming="panelA.streaming" :streaming-text="panelA.streamingText" :error="panelA.error"
               :annotations="chatMode === 'single' && !evaluationStale ? evaluation.result?.annotations ?? [] : []"
               :selected-annotation-index="selectedAnnotation.index"
-              :selected-annotation-field="selectedAnnotation.field"
-              @open-prompt="showPromptA = true"
-              @select-annotation="handleSelectAnnotation"
-            />
+              :selected-annotation-field="selectedAnnotation.field" @open-prompt="showPromptA = true"
+              @select-annotation="handleSelectAnnotation" />
             <div class="panel-divider" v-if="chatMode === 'sbs'"></div>
-            <ChatPanel
-              v-if="chatMode === 'sbs'"
-              side="b"
-              :chat-mode="chatMode"
-              :model-name="globalModelConfig.panelB.name"
-              :prompt-name="panelB.promptName"
-              :messages="messages"
-              :responses="panelB.responses"
-              :streaming="panelB.streaming"
-              :streaming-text="panelB.streamingText"
-              :error="panelB.error"
-              @open-prompt="showPromptB = true"
-            />
+            <ChatPanel v-if="chatMode === 'sbs'" side="b" :chat-mode="chatMode"
+              :model-name="globalModelConfig.panelB.name" :prompt-name="panelB.promptName" :messages="messages"
+              :responses="panelB.responses" :streaming="panelB.streaming" :streaming-text="panelB.streamingText"
+              :error="panelB.error" @open-prompt="showPromptB = true" />
           </div>
-          <InputBar
-            :is-streaming="panelA.streaming || panelB.streaming"
-            @send="handleSend"
-            @stop="stopStreaming"
-          />
+          <InputBar :is-streaming="panelA.streaming || panelB.streaming" @send="handleSend" @stop="stopStreaming" />
         </div>
-        <EvaluationPanel
-          v-if="chatMode === 'single'"
-          :collapsed="evaluationCollapsed"
-          :result="evaluation.result"
-          :running="evaluation.running"
-          :error="evaluation.error"
-          :stale="evaluationStale"
-          :can-run="canRunEvaluation"
-          :can-export="canExportEvaluation"
-          :selected-index="selectedAnnotation.index"
-          :selected-field="selectedAnnotation.field"
-          @toggle-collapse="evaluationCollapsed = !evaluationCollapsed"
-          @run="runObjectiveEvaluation"
-          @select-annotation="selectAnnotation"
-          @update-annotation="updateAnnotation"
-          @reset-annotations="resetEditedAnnotations"
-          @export-annotations="exportEvaluationJsonl"
-        />
+        <EvaluationPanel v-if="chatMode === 'single'" :collapsed="evaluationCollapsed" :result="evaluation.result"
+          :running="evaluation.running" :error="evaluation.error" :stale="evaluationStale" :can-run="canRunEvaluation"
+          :can-export="canExportEvaluation" :selected-index="selectedAnnotation.index"
+          :selected-field="selectedAnnotation.field" @toggle-collapse="evaluationCollapsed = !evaluationCollapsed"
+          @run="runObjectiveEvaluation" @select-annotation="selectAnnotation" @update-annotation="updateAnnotation"
+          @reset-annotations="resetEditedAnnotations" @export-annotations="exportEvaluationJsonl" />
       </main>
 
-      <GlobalSettings 
-        :visible="showGlobalSettings" 
-        :config="globalModelConfig"
-        @close="showGlobalSettings = false" 
-        @save="saveGlobalConfig" 
-      />
-      
-      <PromptEditor
-        :visible="showPromptA" side="a" :current-prompt="panelA.systemPrompt"
-        @close="showPromptA = false" @save="savePromptA"
-      />
-      <PromptEditor
-        :visible="showPromptB" side="b" :current-prompt="panelB.systemPrompt"
-        @close="showPromptB = false" @save="savePromptB"
-      />
+      <GlobalSettings :visible="showGlobalSettings" :config="globalModelConfig" @close="showGlobalSettings = false"
+        @save="saveGlobalConfig" />
+
+      <PromptEditor :visible="showPromptA" side="a" :current-prompt="panelA.systemPrompt" @close="showPromptA = false"
+        @save="savePromptA" />
+      <PromptEditor :visible="showPromptB" side="b" :current-prompt="panelB.systemPrompt" @close="showPromptB = false"
+        @save="savePromptB" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useChat } from './composables/useChat'
-import type { AnnotationFieldKey } from './composables/useEvaluation'
-import ChatPanel from './components/ChatPanel.vue'
-import InputBar from './components/InputBar.vue'
-import GlobalSettings from './components/GlobalSettings.vue'
-import PromptEditor from './components/PromptEditor.vue'
-import Sidebar from './components/Sidebar.vue'
-import EvaluationPanel from './components/EvaluationPanel.vue'
+// 应用入口：组合 useChat 提供的状态与操作，挂载主要布局和面板组件。
+// 该文件主要负责将业务逻辑与 UI 组件连接，不包含复杂逻辑实现。
+import { ref } from 'vue';
+import { useChat } from './composables/useChat';
+import type { AnnotationFieldKey } from './composables/useEvaluation';
+import ChatPanel from './components/ChatPanel.vue';
+import InputBar from './components/InputBar.vue';
+import GlobalSettings from './components/GlobalSettings.vue';
+import PromptEditor from './components/PromptEditor.vue';
+import Sidebar from './components/Sidebar.vue';
+import EvaluationPanel from './components/EvaluationPanel.vue';
 
-const { 
+const {
   messages, panelA, panelB, sendMessage, stopStreaming, clearChat,
   globalModelConfig,
   evaluation, evaluationStale, canRunEvaluation, canExportEvaluation, runObjectiveEvaluation,
   selectedAnnotation, selectAnnotation, updateAnnotation, resetEditedAnnotations, exportEvaluationJsonl,
   chatMode, setChatMode,
   sessions, activeModeSessions, currentSessionId, createNewSession, switchSession, deleteSession
-} = useChat()
+} = useChat();
 
-const showGlobalSettings = ref(false)
-const showPromptA = ref(false)
-const showPromptB = ref(false)
-const evaluationCollapsed = ref(false)
+const showGlobalSettings = ref(false);
+const showPromptA = ref(false);
+const showPromptB = ref(false);
+const evaluationCollapsed = ref(false);
 
 function handleSend(content: string) {
-  sendMessage(content, chatMode.value === 'sbs' ? ['a', 'b'] : ['a'])
+  sendMessage(content, chatMode.value === 'sbs' ? ['a', 'b'] : ['a']);
 }
 
 function handleSelectAnnotation(index: number, field: AnnotationFieldKey) {
-  evaluationCollapsed.value = false
-  selectAnnotation(index, field)
+  evaluationCollapsed.value = false;
+  selectAnnotation(index, field);
 }
 
 function saveGlobalConfig(newConfig: typeof globalModelConfig) {
-  globalModelConfig.panelA = { ...newConfig.panelA }
-  globalModelConfig.panelB = { ...newConfig.panelB }
-  globalModelConfig.evaluator = { ...newConfig.evaluator }
-  globalModelConfig.modelProfiles = newConfig.modelProfiles.map(profile => ({ ...profile }))
-  globalModelConfig.panelAProfileId = newConfig.panelAProfileId
-  globalModelConfig.panelBProfileId = newConfig.panelBProfileId
-  globalModelConfig.evaluatorProfileId = newConfig.evaluatorProfileId
-  globalModelConfig.generation = { ...newConfig.generation }
+  globalModelConfig.panelA = { ...newConfig.panelA };
+  globalModelConfig.panelB = { ...newConfig.panelB };
+  globalModelConfig.evaluator = { ...newConfig.evaluator };
+  globalModelConfig.modelProfiles = newConfig.modelProfiles.map(profile => ({ ...profile }));
+  globalModelConfig.panelAProfileId = newConfig.panelAProfileId;
+  globalModelConfig.panelBProfileId = newConfig.panelBProfileId;
+  globalModelConfig.evaluatorProfileId = newConfig.evaluatorProfileId;
+  globalModelConfig.generation = { ...newConfig.generation };
 }
 
-function savePromptA({ content, name }: { content: string; name: string }) {
-  panelA.systemPrompt = content
-  panelA.promptName = name
+function savePromptA({ content, name }: { content: string; name: string; }) {
+  panelA.systemPrompt = content;
+  panelA.promptName = name;
 }
 
-function savePromptB({ content, name }: { content: string; name: string }) {
-  panelB.systemPrompt = content
-  panelB.promptName = name
+function savePromptB({ content, name }: { content: string; name: string; }) {
+  panelB.systemPrompt = content;
+  panelB.promptName = name;
 }
 </script>
 
@@ -358,8 +305,8 @@ function savePromptB({ content, name }: { content: string; name: string }) {
   min-width: 0;
 }
 
-.panels-container > :first-child,
-.panels-container > :last-child {
+.panels-container> :first-child,
+.panels-container> :last-child {
   flex: 1;
   min-width: 0;
 }
@@ -396,6 +343,7 @@ function savePromptB({ content, name }: { content: string; name: string }) {
 }
 
 @media (max-width: 768px) {
+
   .logo-copy p,
   .logo-badge {
     display: none;

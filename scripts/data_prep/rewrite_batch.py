@@ -1,36 +1,17 @@
 """
-Batch Rewrite Generator for DPO Chosen Data (Leaf-Node Edition)
-================================================================
+DPO 已选回复批量重写工具（叶子节点专用）
+=================================================
 
-Generates OpenAI Batch API compatible JSONL files that instruct a large language
-model to rewrite the "chosen" (highest-scored) teacher responses in a DPO dataset.
+生成与 OpenAI Batch API 兼容的 JSONL，请求大模型重写 DPO 数据集中得分最高的
+教师回复（`chosen` 字段）。
 
-The workflow targets DPO *leaf nodes*: each DPO pair's `chosen` field is the
-terminal (leaf) response, so rewriting it has no cascading effect on conversation
-history.
+该流程针对 DPO 的 "叶子节点"：每个 DPO 对的 `chosen` 字段为终端回复，重写它不会对
+对话历史产生级联影响。
 
-The rewrite prompt is reverse-engineered from the benchmark scoring formula
-(objective_eval.py) so that rewritten responses will score higher on all metrics.
+重写提示（prompt）基于基准评分公式（objective_eval.py）反向设计，旨在使重写后的
+回复在多个指标上得分更高。
 
-Usage:
-  # Step 1: Convert nested data → DPO format
-  uv run scripts/data_prep/rewrite_batch.py convert \\
-      -i data/dpo_data/interdisciplinary_multiturn1.json \\
-      -o data/rewrite_batch/dpo_pairs.json
-
-  # Step 2: Generate batch JSONL for rewriting chosen
-  uv run scripts/data_prep/rewrite_batch.py prepare \\
-      -i data/rewrite_batch/dpo_pairs.json \\
-      -o data/rewrite_batch/rewrite_requests.jsonl \\
-      -m qwen-plus
-
-  # Step 3: (Upload & run batch on the API provider's platform)
-
-  # Step 4: Merge results back into DPO format
-  uv run scripts/data_prep/rewrite_batch.py merge \\
-      -i data/rewrite_batch/dpo_pairs.json \\
-      -b data/rewrite_batch/batch_output.jsonl \\
-      -o data/rewrite_batch/dpo_pairs_rewritten.json
+用法示例见下方步骤：先 convert → prepare → 在 API 平台运行批量请求 → merge。
 """
 
 import argparse
@@ -93,7 +74,7 @@ REWRITE_SYSTEM_PROMPT = """你是一位国内顶级的教育学博士后研究�
 6. **⚠️ 绝对禁止"先铺垫再提问"的两段式结构**。知识注入要融入前半句的自然过渡中（如"其实……所以……那你觉得……？"），不能单独成段。"""
 
 # ============================================================================
-# Helper: build the user-side prompt for a single rewrite request
+# 辅助：为单条重写请求构建用户侧 prompt
 # ============================================================================
 
 
@@ -123,7 +104,7 @@ def build_rewrite_user_prompt(
 
 
 # ============================================================================
-# convert: nested format → DPO pairs JSON
+# convert：嵌套格式 → DPO 对列表（JSON）
 # ============================================================================
 
 
@@ -134,7 +115,7 @@ def convert_to_dpo(
 ):
     """Convert nested multiturn data to flat DPO pairs using MultiturnDataset."""
 
-    # Add project root to path for collabllm imports
+    # 将项目根目录加入 sys.path，便于导入 collabllm
     project_root = Path(__file__).parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -151,15 +132,13 @@ def convert_to_dpo(
     # Convert to list of dicts and save
     pairs = []
     for row in train_data:
-        pairs.append(
-            {
-                "prompt": row["prompt"],
-                "chosen": row["chosen"],
-                "rejected": row["rejected"],
-                "score_chosen": row["score_chosen"],
-                "score_rejected": row["score_rejected"],
-            }
-        )
+        pairs.append({
+            "prompt": row["prompt"],
+            "chosen": row["chosen"],
+            "rejected": row["rejected"],
+            "score_chosen": row["score_chosen"],
+            "score_rejected": row["score_rejected"],
+        })
 
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
@@ -171,7 +150,7 @@ def convert_to_dpo(
 
 
 # ============================================================================
-# prepare: generate Batch API JSONL from DPO pairs
+# prepare：从 DPO 对生成 Batch API JSONL 请求文件
 # ============================================================================
 
 
@@ -283,7 +262,7 @@ def prepare_batch_file(
 
 
 # ============================================================================
-# merge: merge batch API results back into DPO pairs
+# merge：将批量 API 输出合并回 DPO 对
 # ============================================================================
 
 
@@ -379,7 +358,7 @@ def merge_results(
 
 
 # ============================================================================
-# CLI
+# 命令行接口（CLI）
 # ============================================================================
 
 

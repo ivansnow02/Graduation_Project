@@ -1,15 +1,10 @@
 """
-Export a merged 16-bit or LoRA model to GGUF format.
+将已合并的 16-bit 模型或 LoRA 适配器导出为 GGUF 格式。
 
-For already-merged 16-bit models: directly calls llama.cpp converter (no GPU needed).
-For LoRA adapters: merges with merge_lora_to_base.py first, then converts.
+对于已合并的 16-bit 模型：直接调用 llama.cpp 的转换脚本（无需 GPU）。
+对于 LoRA 适配器：先使用 `merge_lora_to_base.py` 合并到基模型，再进行转换。
 
-Usage:
-    # From already-merged 16-bit model (fast, low memory):
-    python scripts/export_gguf.py --model_dir outputs/dpo500softmargin_merged_16bit --quantization q4_k_m
-
-    # From LoRA adapter (needs base model download + merge first):
-    python scripts/export_gguf.py --model_dir outputs/dpo500softmargin --quantization q4_k_m --lora
+用法示例见下方注释。
 """
 
 import argparse
@@ -24,7 +19,7 @@ LLAMA_CPP_DIR = os.path.join(PROJECT_ROOT, "llama.cpp")
 
 
 def _clean_config_json(model_dir):
-    """Remove quantization_config from config.json if present."""
+    """如果 config.json 中存在 `quantization_config` 字段，则将其移除（避免转换器报错）。"""
     config_path = os.path.join(model_dir, "config.json")
     if not os.path.exists(config_path):
         return
@@ -38,7 +33,7 @@ def _clean_config_json(model_dir):
 
 
 def _get_model_dtype(model_dir):
-    """Infer model dtype from config.json. Returns 'bf16' or 'f16' for the converter."""
+    """从 config.json 推断模型的数据类型（dtype），返回 'bf16' 或 'f16' 以供转换脚本使用。"""
     config_path = os.path.join(model_dir, "config.json")
     with open(config_path) as f:
         cfg = json.load(f)
@@ -51,12 +46,15 @@ def _get_model_dtype(model_dir):
 
 
 def convert_hf_to_gguf(model_dir, output_gguf, outtype="bf16"):
-    """Convert HuggingFace model to GGUF using llama.cpp converter."""
+    """使用 llama.cpp 的转换脚本将 HuggingFace 模型转换为 GGUF。"""
     converter = os.path.join(LLAMA_CPP_DIR, "unsloth_convert_hf_to_gguf.py")
     cmd = [
-        sys.executable, converter,
-        "--outfile", output_gguf,
-        "--outtype", outtype,
+        sys.executable,
+        converter,
+        "--outfile",
+        output_gguf,
+        "--outtype",
+        outtype,
         model_dir,
     ]
     print(f"  Running: {' '.join(cmd)}")
@@ -64,7 +62,7 @@ def convert_hf_to_gguf(model_dir, output_gguf, outtype="bf16"):
 
 
 def quantize_gguf(input_gguf, output_gguf, quant_type):
-    """Quantize a bf16 GGUF file to a smaller format."""
+    """将 bf16 的 GGUF 文件量化为目标更小格式（如 q4_k_m）。"""
     quantizer = os.path.join(LLAMA_CPP_DIR, "llama-quantize")
     cmd = [quantizer, input_gguf, output_gguf, quant_type]
     print(f"  Running: {' '.join(cmd)}")
@@ -77,7 +75,7 @@ def export_to_gguf(model_dir, quantization):
     model_name = os.path.basename(os.path.normpath(model_dir))
     dtype = _get_model_dtype(model_dir)
 
-    # Step 1: Convert HF model to unquantized GGUF
+    # 第一步：将 HF 模型转换为未量化的 GGUF
     base_gguf = os.path.join(model_dir, f"{model_name}.BF16.gguf")
     print(f"[1/2] Converting to {dtype} GGUF...")
     if os.path.exists(base_gguf):
@@ -85,7 +83,7 @@ def export_to_gguf(model_dir, quantization):
     else:
         convert_hf_to_gguf(model_dir, base_gguf, outtype=dtype)
 
-    # Step 2: Quantize to target format
+    # 第二步：将 GGUF 量化为目标格式（如果需要）
     if quantization in ("f16", "bf16", "f32"):
         print(f"[2/2] No quantization needed — output is {base_gguf}")
         return
@@ -105,20 +103,28 @@ if __name__ == "__main__":
     parser.add_argument("--model_dir", type=str, required=True)
     parser.add_argument("--quantization", type=str, default="q4_k_m")
     parser.add_argument(
-        "--lora", action="store_true",
+        "--lora",
+        action="store_true",
         help="Input is a LoRA adapter. Merge with base model first via merge_lora_to_base.py.",
     )
     args = parser.parse_args()
 
     if args.lora:
-        merge_script = os.path.join(PROJECT_ROOT, "scripts", "train", "merge_lora_to_base.py")
+        merge_script = os.path.join(
+            PROJECT_ROOT, "scripts", "train", "merge_lora_to_base.py"
+        )
         merged_dir = args.model_dir.rstrip("/") + "_merged_16bit"
         if not os.path.exists(os.path.join(merged_dir, "config.json")):
             print("Merging LoRA adapter first...")
             subprocess.run(
-                [sys.executable, merge_script,
-                 "--adapter_dir", args.model_dir,
-                 "--output_dir", merged_dir],
+                [
+                    sys.executable,
+                    merge_script,
+                    "--adapter_dir",
+                    args.model_dir,
+                    "--output_dir",
+                    merged_dir,
+                ],
                 check=True,
             )
         else:

@@ -18,9 +18,9 @@ from collabllm.utils.clean import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
+# =======================================================================
 # DataCleaner: 数据清洗工具，支持规则过滤 + 质量评分 + 多样性平衡抽样
-# ============================================================================
+# =======================================================================
 # 核心特性：
 #   1. 格式检查：对话长度、角色、内容完整性
 #   2. 内容质量检查：防止泄题、防止讲课模式、强制提问（苏格拉底法）
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 #      - 每个 topic 内按质量排序，取最优样本
 #      - 样本在各 topic 之间相对均衡分配
 #      - 如果数据不足，从全局高质量池中补齐
-# ============================================================================
+# =======================================================================
 
 
 class DataCleaner:
@@ -40,6 +40,13 @@ class DataCleaner:
         Args:
             input_path (str): Path to the input dataset.
             output_path (str): Path to save the cleaned dataset.
+        """
+        """
+        使用输入与输出路径初始化 DataCleaner。
+
+        参数：
+            input_path (str): 输入数据集路径。
+            output_path (str): 清洗后数据保存路径。
         """
         self.input_path = input_path
         self.output_path = output_path
@@ -91,13 +98,11 @@ class DataCleaner:
                         yield json.loads(raw)
                     except json.JSONDecodeError as e:
                         self.stats["json_errors"] += 1
-                        self.dropped_samples.append(
-                            {
-                                "file": path,
-                                "line_no": lineno,
-                                "line": raw[:500],
-                            }
-                        )
+                        self.dropped_samples.append({
+                            "file": path,
+                            "line_no": lineno,
+                            "line": raw[:500],
+                        })
                         logger.debug("JSON parse failed %s:%d: %s", path, lineno, e)
         except Exception as e:
             logger.exception("Failed to read %s: %s", path, e)
@@ -385,12 +390,10 @@ class DataCleaner:
                 if not passed:
                     self.stats[reason] += 1
                     if len(self.dropped_samples) < 3:
-                        self.dropped_samples.append(
-                            {
-                                "reason": reason,
-                                "content": session.to_dict(),
-                            }
-                        )
+                        self.dropped_samples.append({
+                            "reason": reason,
+                            "content": session.to_dict(),
+                        })
                     continue
 
                 passed, reason = self.filter_safety(session)
@@ -436,8 +439,8 @@ class DataCleaner:
             f"Advanced Constraints Drops: IKT={metrics_stats['low_ikt']}, Variety={metrics_stats['low_variety']}"
         )
 
-        # 4. Soft Filter: Top Percentile & Diversity Balance
-        # User Strategy: "Cherry-Picking" - Top 30%-40%
+        # 4. Soft 过滤：顶级百分位与多样性平衡
+        # 用户策略："摘樱桃"（优先挑选最优样本） - 顶端 30%-40%
 
         # Sort valid sessions by score descending first
         self.valid_sessions.sort(key=lambda s: s.quality_score, reverse=True)

@@ -3,18 +3,17 @@ from typing import Any
 
 def is_conversational(example: dict[str, Any]) -> bool:
     r"""
-    Check if the example is in a conversational format.
+    判断示例是否为对话（conversational）格式。
 
-    Args:
+    参数:
         example (`dict[str, Any]`):
-            A single data entry of a dataset. The example can have different keys depending on the
-            dataset type.
+            数据集中的单条条目。不同数据集可能使用不同的键名。
 
-    Returns:
+    返回:
         `bool`:
-            `True` if the data is in a conversational format, `False` otherwise.
+            如果数据为对话格式则返回 `True`，否则返回 `False`。
 
-    Examples:
+    示例:
 
     ```python
     >>> example = {"prompt": [{"role": "user", "content": "What color is the sky?"}]}
@@ -28,15 +27,19 @@ def is_conversational(example: dict[str, Any]) -> bool:
     supported_keys = ["prompt", "chosen", "rejected", "completion", "messages"]
     example_keys = {key for key in example.keys() if key in supported_keys}
 
-    # It must have one of the supported keys
+    # 必须包含支持的键之一
     if example_keys:
-        key = example_keys.pop()  # take the first supported key
+        key = example_keys.pop()  # 取出一个支持的键
         maybe_messages = example[key]
-        # It must be a list of messages,
+        # 它应当是一个消息列表（list）
         if isinstance(maybe_messages, list):
             maybe_message = maybe_messages[0]
-            # Each message must a list of dictionaries with keys "role" and "content"
-            if isinstance(maybe_message, dict) and "role" in maybe_message and "content" in maybe_message:
+            # 每条消息应为包含 "role" 和 "content" 字段的字典
+            if (
+                isinstance(maybe_message, dict)
+                and "role" in maybe_message
+                and "content" in maybe_message
+            ):
                 return True
 
     return False

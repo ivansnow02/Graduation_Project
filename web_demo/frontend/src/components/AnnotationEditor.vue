@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
+// 组件说明：AnnotationEditor 用于显示、选择并人工修正评测模型输出的逐轮标注。
+// Props:
+// - annotations: 当前会话的 ObjectiveAnnotation 列表
+// - selectedIndex/selectedField: 当前选中的标注项与字段
+// Emits:
+// - select/update/reset/export: 用于上层组件交互
+import { computed, shallowRef } from 'vue';
 import {
   COGNITIVE_LEVEL_OPTIONS,
   DISCIPLINE_TRANSFER_OPTIONS,
@@ -9,56 +15,56 @@ import {
   TEACHING_STRATEGY_OPTIONS,
   type AnnotationFieldKey,
   type ObjectiveAnnotation,
-} from '../composables/useEvaluation'
+} from '../composables/useEvaluation';
 
 const props = defineProps<{
-  annotations: ObjectiveAnnotation[]
-  selectedIndex: number
-  selectedField: AnnotationFieldKey | null
-  stale: boolean
-  canExport: boolean
-}>()
+  annotations: ObjectiveAnnotation[];
+  selectedIndex: number;
+  selectedField: AnnotationFieldKey | null;
+  stale: boolean;
+  canExport: boolean;
+}>();
 
 const emit = defineEmits<{
-  select: [index: number, field: AnnotationFieldKey | null]
-  update: [index: number, patch: Partial<ObjectiveAnnotation>]
-  reset: []
-  export: []
-}>()
+  select: [index: number, field: AnnotationFieldKey | null];
+  update: [index: number, patch: Partial<ObjectiveAnnotation>];
+  reset: [];
+  export: [];
+}>();
 
-const showRawJson = shallowRef(false)
+const showRawJson = shallowRef(false);
 
 const selectedAnnotation = computed(() => {
-  if (props.selectedIndex < 0 || props.selectedIndex >= props.annotations.length) return null
-  return props.annotations[props.selectedIndex]
-})
+  if (props.selectedIndex < 0 || props.selectedIndex >= props.annotations.length) return null;
+  return props.annotations[props.selectedIndex];
+});
 
 const selectedRole = computed(() => {
-  return selectedAnnotation.value?.speaker === '教师' ? 'teacher' : 'student'
-})
+  return selectedAnnotation.value?.speaker === '教师' ? 'teacher' : 'student';
+});
 
 function previewUtterance(text: string) {
-  if (text.length <= 54) return text
-  return `${text.slice(0, 54)}...`
+  if (text.length <= 54) return text;
+  return `${text.slice(0, 54)}...`;
 }
 
 function selectField(field: AnnotationFieldKey | null) {
-  if (props.selectedIndex < 0) return
-  emit('select', props.selectedIndex, field)
+  if (props.selectedIndex < 0) return;
+  emit('select', props.selectedIndex, field);
 }
 
 function updateField(field: AnnotationFieldKey, value: string) {
-  if (props.selectedIndex < 0) return
-  emit('update', props.selectedIndex, { [field]: value })
-  emit('select', props.selectedIndex, field)
+  if (props.selectedIndex < 0) return;
+  emit('update', props.selectedIndex, { [field]: value });
+  emit('select', props.selectedIndex, field);
 }
 
 function isFieldActive(field: AnnotationFieldKey) {
-  return props.selectedField === field
+  return props.selectedField === field;
 }
 
 function fieldValue(field: AnnotationFieldKey) {
-  return selectedAnnotation.value?.[field] ?? ''
+  return selectedAnnotation.value?.[field] ?? '';
 }
 
 function listFieldValues(field: AnnotationFieldKey) {
@@ -66,19 +72,19 @@ function listFieldValues(field: AnnotationFieldKey) {
     .replace(/，/g, ',')
     .split(',')
     .map((item) => item.trim())
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 function isListOptionSelected(field: AnnotationFieldKey, option: string) {
-  return listFieldValues(field).includes(option)
+  return listFieldValues(field).includes(option);
 }
 
 function toggleListOption(field: AnnotationFieldKey, option: string) {
-  const values = listFieldValues(field)
+  const values = listFieldValues(field);
   const nextValues = values.includes(option)
     ? values.filter((value) => value !== option)
-    : [...values, option]
-  updateField(field, nextValues.join(','))
+    : [...values, option];
+  updateField(field, nextValues.join(','));
 }
 </script>
 
@@ -102,13 +108,8 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
 
     <template v-else>
       <div class="annotation-list">
-        <button
-          v-for="(annotation, index) in annotations"
-          :key="`${annotation.speaker}-${index}`"
-          class="annotation-card"
-          :class="{ selected: index === selectedIndex }"
-          @click="$emit('select', index, null)"
-        >
+        <button v-for="(annotation, index) in annotations" :key="`${annotation.speaker}-${index}`"
+          class="annotation-card" :class="{ selected: index === selectedIndex }" @click="$emit('select', index, null)">
           <span class="annotation-card-head">
             <span class="speaker-badge" :class="annotation.speaker === '教师' ? 'speaker-teacher' : 'speaker-student'">
               {{ annotation.speaker }}
@@ -139,26 +140,17 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
 
           <label class="field-block" :class="{ active: isFieldActive('discipline') }">
             <span class="field-label">学科</span>
-            <input
-              class="field-input"
-              type="text"
-              :value="fieldValue('discipline')"
-              placeholder="如：生物,地质学"
+            <input class="field-input" type="text" :value="fieldValue('discipline')" placeholder="如：生物,地质学"
               @focus="selectField('discipline')"
-              @input="updateField('discipline', ($event.target as HTMLInputElement).value)"
-            />
+              @input="updateField('discipline', ($event.target as HTMLInputElement).value)" />
           </label>
 
           <div class="field-block" :class="{ active: isFieldActive('discipline_transfer') }">
             <span class="field-label">跨学科迁移</span>
             <div class="option-group">
-              <button
-                v-for="option in DISCIPLINE_TRANSFER_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in DISCIPLINE_TRANSFER_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: fieldValue('discipline_transfer') === option }"
-                @click="updateField('discipline_transfer', option)"
-              >
+                @click="updateField('discipline_transfer', option)">
                 {{ option }}
               </button>
             </div>
@@ -167,13 +159,9 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
           <div class="field-block" :class="{ active: isFieldActive('cognitive_level') }">
             <span class="field-label">Bloom</span>
             <div class="option-group">
-              <button
-                v-for="option in COGNITIVE_LEVEL_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in COGNITIVE_LEVEL_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: fieldValue('cognitive_level') === option }"
-                @click="updateField('cognitive_level', option)"
-              >
+                @click="updateField('cognitive_level', option)">
                 {{ option }}
               </button>
             </div>
@@ -186,13 +174,9 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
           <div class="field-block" :class="{ active: isFieldActive('teacher_intent') }">
             <span class="field-label">教学意图</span>
             <div class="option-group">
-              <button
-                v-for="option in TEACHER_INTENT_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in TEACHER_INTENT_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: fieldValue('teacher_intent') === option }"
-                @click="updateField('teacher_intent', option)"
-              >
+                @click="updateField('teacher_intent', option)">
                 {{ option }}
               </button>
             </div>
@@ -201,13 +185,9 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
           <div class="field-block" :class="{ active: isFieldActive('teaching_strategy') }">
             <span class="field-label">教学策略</span>
             <div class="option-group">
-              <button
-                v-for="option in TEACHING_STRATEGY_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in TEACHING_STRATEGY_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: isListOptionSelected('teaching_strategy', option) }"
-                @click="toggleListOption('teaching_strategy', option)"
-              >
+                @click="toggleListOption('teaching_strategy', option)">
                 {{ option }}
               </button>
             </div>
@@ -216,13 +196,9 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
           <div class="field-block" :class="{ active: isFieldActive('teacher_guidance_level') }">
             <span class="field-label">引导等级</span>
             <div class="option-group">
-              <button
-                v-for="option in TEACHER_GUIDANCE_LEVEL_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in TEACHER_GUIDANCE_LEVEL_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: fieldValue('teacher_guidance_level') === option }"
-                @click="updateField('teacher_guidance_level', option)"
-              >
+                @click="updateField('teacher_guidance_level', option)">
                 {{ option }}
               </button>
             </div>
@@ -235,13 +211,9 @@ function toggleListOption(field: AnnotationFieldKey, option: string) {
           <div class="field-block" :class="{ active: isFieldActive('student_cognition_state') }">
             <span class="field-label">认知状态</span>
             <div class="option-group">
-              <button
-                v-for="option in STUDENT_COGNITION_STATE_OPTIONS"
-                :key="option"
-                class="option-chip"
+              <button v-for="option in STUDENT_COGNITION_STATE_OPTIONS" :key="option" class="option-chip"
                 :class="{ selected: fieldValue('student_cognition_state') === option }"
-                @click="updateField('student_cognition_state', option)"
-              >
+                @click="updateField('student_cognition_state', option)">
                 {{ option }}
               </button>
             </div>

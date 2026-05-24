@@ -1,49 +1,30 @@
 """
 collabllm.datasets.multiturn
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Unified loader + wrapper for multi-turn chat data.
+多轮对话数据的统一加载器与包装器。
 
-Initialization supports three input styles:
+初始化支持三种输入形式：
 
-1. **Flat list** (`List[dict]`) with required keys per row:
-   {'prompt', 'completion', 'conv_id', 'score',
-    'single_turn_prompt', 'single_turn_completion', 'single_turn_metadata'}
+1. **扁平列表** (`List[dict]`)，每行包含必需字段：
+     {'prompt', 'completion', 'conv_id', 'score',
+        'single_turn_prompt', 'single_turn_completion', 'single_turn_metadata'}
 
-2. **Nested structure** (`List[dict]`) per conversation:
-   [
-     {
-       "conv_id": ...,
-       "single_turn_prompt": ...,
-       "single_turn_completion": ...,
-       "single_turn_metadata": ...,
-       "turns": [
-         {
-           "prompt": [ {role,content}, ... ],
-           "responses": [
-             {"completion": ..., "score": ...},
-             {"completion": ..., "score": ...},
-             ...
-           ]
-         },
-         ...
-       ]
-     },
-     ...
-   ]
+2. **嵌套结构**（每个对话为一个 dict）：
+     参考文件中常见的嵌套格式，包含 conv_id、turns 等字段。
 
-3. **Local HF dataset directory** (path) or **HF Hub repo ID** (string).
+3. **本地 HF 数据集目录**（`Dataset.save_to_disk` 保存的目录）或 **HF Hub 仓库 ID**（字符串）。
 
-In all cases, the internal `self.data` will be a flat `List[dict]` with keys:
+内部统一将数据转换为扁平的 `self.data`（List[dict]），包含字段：
 {prompt, completion, conv_id, score, single_turn_prompt, single_turn_completion,
  single_turn_metadata, turn_id}
 
-Derived field
+派生字段说明
 -------------
-• `turn_id` is set to `len(prompt)` if not provided explicitly.
+• 若未显式给出，`turn_id` 将被设置为 `len(prompt)`。
 
-Converters (all use a uniform random splitter)
------------------------------------------------
-• `to_sft_dataset()`   → DatasetDict {text}
+转换器（均使用均匀随机拆分）
+--------------------------------
+• `to_sft_dataset()`   → DatasetDict {messages}
 • `to_dpo_dataset()`   → DatasetDict {prompt, chosen, rejected, score_*}
 • `to_inputs_dataset()`→ DatasetDict {prompt, single_turn_*}
 """
@@ -75,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
-# uniform splitter                                                            #
+# 均匀拆分器 (uniform splitter)
 # --------------------------------------------------------------------------- #
 def _uniform_split(
     full_ds: Dataset,
@@ -98,7 +79,7 @@ def _uniform_split(
 
 
 # --------------------------------------------------------------------------- #
-# main dataclass                                                              #
+# 主数据类
 # --------------------------------------------------------------------------- #
 class MultiturnDataset:
     def __init__(
@@ -109,15 +90,14 @@ class MultiturnDataset:
         add_system_prompt: bool = True,
     ):
         """
-        Parameters
-        ----------
+        参数说明：
         data_or_local_dir_or_hf_repo_or_nested :
-            • Flat list of dicts with required keys (old style), OR
-            • Nested list of conversations (new style), OR
-            • Local path saved by `Dataset.save_to_disk`, OR
-            • HF Hub repo ID (e.g. "org/dataset").
+            • 扁平字典列表（旧格式），或
+            • 嵌套对话列表（新格式），或
+            • 本地由 `Dataset.save_to_disk` 保存的目录路径，或
+            • HF Hub 仓库 ID（如 "org/dataset"）。
         seed : int
-            RNG seed for uniform splitting.
+            用于均匀拆分的随机种子。
         """
         self.seed = seed
         self.sys_msg = (
@@ -131,15 +111,14 @@ class MultiturnDataset:
             path = str(data_or_local_dir_or_hf_repo_or_nested)
             if os.path.isdir(path):
                 ds_dict = load_from_disk(path)  # type: ignore
-                # If it's a DatasetDict, we might need to handle it differently,
-                # but the original code assumed it has .flatten()
+                # 如果是 DatasetDict，可能需要特殊处理；原始代码假设其支持 .flatten()
                 if hasattr(ds_dict, "flatten"):
                     raw_list = [dict(r) for r in ds_dict.flatten()]  # type: ignore
                 else:
-                    # If it's a DatasetDict, combine all splits
+                    # 如果是 DatasetDict，合并所有 split
                     raw_list = [dict(r) for split in ds_dict.values() for r in split]  # type: ignore
             else:
-                # Handle JSON/JSONL files
+                # 处理 JSON / JSONL 文件
                 import json
 
                 if path.endswith(".json"):
@@ -152,7 +131,7 @@ class MultiturnDataset:
                             if line.strip():
                                 raw_list.append(json.loads(line))
                 else:
-                    # Fallback to load_dataset for other file types
+                    # 其他文件类型回退使用 load_dataset 加载
                     ds = load_dataset("json", data_files=path, split="train")
                     raw_list = [dict(r) for r in ds]
         else:
@@ -161,7 +140,7 @@ class MultiturnDataset:
             )  # type: ignore
             raw_list = [dict(r) for _, split in ds_dict.items() for r in split]
 
-        # Filter out None entries that might result from failed conversions
+        # 过滤掉可能由转换失败产生的 None 条目
         raw_list = [row for row in raw_list if row is not None]
 
         if not raw_list:
@@ -169,11 +148,11 @@ class MultiturnDataset:
                 "Loaded dataset is empty (or contains only empty entries)."
             )
 
-        # 2) Detect nested structure: presence of "turns" key in first element
+        # 2) 检测是否为嵌套结构：检查第一个元素是否包含 "turns" 键
         if isinstance(raw_list[0], dict) and "turns" in raw_list[0]:
             self.data = self._flatten_nested(raw_list)
         elif isinstance(raw_list[0], dict):
-            # Assume flat structure; validate required keys
+            # 视为扁平结构；验证必需字段
             if not _REQUIRED.issubset(raw_list[0]):
                 missing = _REQUIRED - set(raw_list[0])
                 raise ValueError(f"Missing required keys in flat data: {missing}")
@@ -182,7 +161,7 @@ class MultiturnDataset:
             for row in raw_list:
                 if not isinstance(row.get("prompt"), Sequence):
                     raise TypeError(
-                        f"Row {row.get('conv_id')} `prompt` must be a list of messages. Got: {type(row.get('prompt'))}"
+                        f"Row {row.get('conv_id')} 的 `prompt` 必须为消息列表。当前类型: {type(row.get('prompt'))}"
                     )
                 row.setdefault("turn_id", len(row["prompt"]))
 
@@ -303,7 +282,7 @@ class MultiturnDataset:
         return flat
 
     # ------------------------------------------------------------------ #
-    # SFT                                                                #
+    # SFT（监督微调）                                                      #
     # ------------------------------------------------------------------ #
     def to_sft_dataset(
         self,
@@ -313,7 +292,7 @@ class MultiturnDataset:
         lower_bound_metric: Optional[str] = None,
         lower_bound: Optional[float] = 0.0,
     ) -> DatasetDict:
-        # Select best example per conversation ID: prefer latest turn, then highest score
+        # 为每个对话 ID 选择最佳样本：优先选择最新轮次，其次选择分数更高者
         best_examples = {}
         for row in self.data:
             cid = row["conv_id"]
@@ -325,7 +304,7 @@ class MultiturnDataset:
             ):
                 best_examples[cid] = row
 
-        # Build SFT dialogues, filtering by optional metric threshold
+        # 构建 SFT 对话，按可选的指标阈值进行过滤
         serialized_dialogues = []
         for row in best_examples.values():
             if lower_bound_metric:
@@ -369,7 +348,7 @@ class MultiturnDataset:
         )
 
     # ------------------------------------------------------------------ #
-    # DPO                                                                #
+    # DPO（偏好对比优化）                                                   #
     # ------------------------------------------------------------------ #
     def to_dpo_dataset(
         self,
@@ -378,7 +357,7 @@ class MultiturnDataset:
         n_eval: Optional[int] = None,
         eval_ratio: Optional[float] = 0.0,
     ) -> DatasetDict:
-        # Group rows by (conv_id, turn_id)
+        # 按 (conv_id, turn_id) 分组
         grouped: Dict[tuple, List[Dict[str, Any]]] = {}
         for r in self.data:
             grouped.setdefault((r["conv_id"], r["turn_id"]), []).append(r)
@@ -419,7 +398,7 @@ class MultiturnDataset:
         )
 
     # ------------------------------------------------------------------ #
-    # Inputs                                                             #
+    # Inputs（输入集）                                                      #
     # ------------------------------------------------------------------ #
     def to_inputs_dataset(
         self,
@@ -454,7 +433,7 @@ class MultiturnDataset:
         )
 
     # ------------------------------------------------------------------ #
-    # misc                                                               #
+    # 其他工具方法（misc）                                                  #
     # ------------------------------------------------------------------ #
     def __len__(self):
         return len(self.data)

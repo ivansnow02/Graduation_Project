@@ -1,31 +1,33 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import AnnotationEditor from './AnnotationEditor.vue'
-import type { AnnotationFieldKey, EvaluationRecord, ObjectiveAnnotation } from '../composables/useEvaluation'
+// 组件说明：EvaluationPanel 显示客观评测结果，并嵌入 AnnotationEditor 供人工修订。
+// 行为：支持运行评测、折叠面板、以及导出/重置标注。
+import { computed } from 'vue';
+import AnnotationEditor from './AnnotationEditor.vue';
+import type { AnnotationFieldKey, EvaluationRecord, ObjectiveAnnotation } from '../composables/useEvaluation';
 
 const props = defineProps<{
-  collapsed: boolean
-  result: EvaluationRecord | null
-  running: boolean
-  error: string
-  stale: boolean
-  canRun: boolean
-  canExport: boolean
-  selectedIndex: number
-  selectedField: AnnotationFieldKey | null
-}>()
+  collapsed: boolean;
+  result: EvaluationRecord | null;
+  running: boolean;
+  error: string;
+  stale: boolean;
+  canRun: boolean;
+  canExport: boolean;
+  selectedIndex: number;
+  selectedField: AnnotationFieldKey | null;
+}>();
 
 defineEmits<{
-  run: []
-  toggleCollapse: []
-  selectAnnotation: [index: number, field: AnnotationFieldKey | null]
-  updateAnnotation: [index: number, patch: Partial<ObjectiveAnnotation>]
-  resetAnnotations: []
-  exportAnnotations: []
-}>()
+  run: [];
+  toggleCollapse: [];
+  selectAnnotation: [index: number, field: AnnotationFieldKey | null];
+  updateAnnotation: [index: number, patch: Partial<ObjectiveAnnotation>];
+  resetAnnotations: [];
+  exportAnnotations: [];
+}>();
 
 const metricRows = computed(() => {
-  if (!props.result) return []
+  if (!props.result) return [];
   return [
     ['StrategyDensity', '策略密度', props.result.metrics.StrategyDensity],
     ['StrategyVariety', '策略多样性', props.result.metrics.StrategyVariety],
@@ -34,15 +36,15 @@ const metricRows = computed(() => {
     ['StructureCompleteness', '结构完整度', props.result.metrics.StructureCompleteness],
     ['L3GuidanceRate', 'L3 引导率', props.result.metrics.L3GuidanceRate],
     ['CognitiveCorrectionRate', '认知纠偏率', props.result.metrics.CognitiveCorrectionRate],
-  ] as const
-})
+  ] as const;
+});
 
 const evaluatedAtText = computed(() => {
-  if (!props.result) return ''
-  return new Date(props.result.evaluatedAt).toLocaleString()
-})
+  if (!props.result) return '';
+  return new Date(props.result.evaluatedAt).toLocaleString();
+});
 
-const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?? '--')
+const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?? '--');
 </script>
 
 <template>
@@ -53,13 +55,10 @@ const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?
         <p class="evaluation-subtitle">当前单模型评测会话</p>
       </div>
       <div class="evaluation-actions">
-        <button
-          class="collapse-btn"
-          :aria-label="collapsed ? '展开评测面板' : '折叠评测面板'"
-          :title="collapsed ? '展开评测面板' : '折叠评测面板'"
-          @click="$emit('toggleCollapse')"
-        >
-          <svg v-if="collapsed" class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="collapse-btn" :aria-label="collapsed ? '展开评测面板' : '折叠评测面板'"
+          :title="collapsed ? '展开评测面板' : '折叠评测面板'" @click="$emit('toggleCollapse')">
+          <svg v-if="collapsed" class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
             <path d="M9 18l6-6-6-6" />
           </svg>
           <svg v-else class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -108,17 +107,11 @@ const totalScoreText = computed(() => props.result?.metrics.TotalScore.display ?
           </div>
         </div>
 
-        <AnnotationEditor
-          :annotations="result.annotations"
-          :selected-index="selectedIndex"
-          :selected-field="selectedField"
-          :stale="stale"
-          :can-export="canExport"
+        <AnnotationEditor :annotations="result.annotations" :selected-index="selectedIndex"
+          :selected-field="selectedField" :stale="stale" :can-export="canExport"
           @select="(index, field) => $emit('selectAnnotation', index, field)"
-          @update="(index, patch) => $emit('updateAnnotation', index, patch)"
-          @reset="$emit('resetAnnotations')"
-          @export="$emit('exportAnnotations')"
-        />
+          @update="(index, patch) => $emit('updateAnnotation', index, patch)" @reset="$emit('resetAnnotations')"
+          @export="$emit('exportAnnotations')" />
       </template>
     </template>
   </aside>

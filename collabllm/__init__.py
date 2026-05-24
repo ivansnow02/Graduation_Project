@@ -1,8 +1,7 @@
 """
 collabllm
 ~~~~~~~~~
-Package initialisation: version metadata, global configuration flags,
-and one-time setup (logging, runtime directories, …).
+包初始化：版本元数据、全局配置开关，以及一次性设置（日志、运行目录等）。
 """
 
 from __future__ import annotations
@@ -13,9 +12,9 @@ import os
 from pathlib import Path
 
 
-# Avoid importing setuptools at package import time; provide a tiny local
-# strtobool equivalent to parse environment boolean-like strings. This
-# avoids adding a hard runtime dependency on setuptools and is robust.
+# 避免在包导入时依赖 setuptools；提供一个轻量的 strtobool 等价实现
+# 用于解析环境变量中的布尔值字符串。这样可以避免将 setuptools
+# 作为运行时强依赖，代码更稳健。
 def _local_strtobool(val: str) -> int:
     """Return 1 for truthy strings, 0 for falsy strings, else raise ValueError.
 
@@ -31,7 +30,7 @@ def _local_strtobool(val: str) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Public package metadata                                                     #
+# 公共包元数据                                                                 #
 # --------------------------------------------------------------------------- #
 __version__ = "0.1.0"  # update as needed
 __author__ = "Shirley Wu & the CollabLLM team"
@@ -44,7 +43,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Utility: boolean env-var parser                                             #
+# 工具：从环境变量解析布尔标志                                               #
 # --------------------------------------------------------------------------- #
 def _env_flag(name: str, default: str = "1") -> bool:
     """
@@ -56,12 +55,12 @@ def _env_flag(name: str, default: str = "1") -> bool:
     try:
         return bool(_local_strtobool(os.getenv(name, default)))
     except ValueError:
-        # Invalid value; fall back to default.
+        # 无效的值，回退到默认值。
         return bool(_local_strtobool(default))
 
 
 # --------------------------------------------------------------------------- #
-# Global logging switch                                                       #
+# 全局日志开关                                                                 #
 # --------------------------------------------------------------------------- #
 ENABLE_COLLABLLM_LOGGING: bool = _env_flag("ENABLE_COLLABLLM_LOGGING", "1")
 
@@ -69,8 +68,8 @@ ENABLE_COLLABLLM_LOGGING: bool = _env_flag("ENABLE_COLLABLLM_LOGGING", "1")
 _pkg_logger = logging.getLogger("collabllm")
 
 if ENABLE_COLLABLLM_LOGGING:
-    # Configure basic console output if the user hasn’t configured logging yet.
-    # We guard with "if not root.handlers" to avoid double-configuration.
+    # 如果用户没有自定义日志配置，则设置基本的控制台输出格式。
+    # 使用 "if not root.handlers" 以避免重复配置。
     if not logging.getLogger().handlers:
         logging.basicConfig(
             level=logging.INFO,
@@ -78,10 +77,10 @@ if ENABLE_COLLABLLM_LOGGING:
         )
     _pkg_logger.info("CollabLLM logging enabled.")
 else:
-    # Silence *all* log records emitted from collabllm.* by:
-    # 1) setting a level higher than CRITICAL
-    # 2) preventing propagation to the root logger
-    # 3) attaching a NullHandler
+    # 使 collabllm.* 的所有日志静默：
+    # 1) 设置日志等级到 CRITICAL 以上
+    # 2) 禁止向 root logger 传播
+    # 3) 附加 NullHandler
     _pkg_logger.setLevel(logging.CRITICAL)
     _pkg_logger.propagate = False
     _pkg_logger.handlers.clear()
@@ -89,30 +88,30 @@ else:
 
 
 # --------------------------------------------------------------------------- #
-# LiteLLM                                                                     #
+# LiteLLM 相关设置                                                              #
 # --------------------------------------------------------------------------- #
 import litellm
 
-# Diable the cache by default, as it is not needed in most cases.
+# 默认禁用 LiteLLM 的缓存（大多数场景不需要）
 litellm.disable_cache()
 
-# Also silence the LiteLLM logger.
+# 同时静默 LiteLLM 的日志
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
-_pkg_logger.info("Disable LiteLLM cache and logging by default. ")
+_pkg_logger.info("已默认禁用 LiteLLM 缓存与日志。")
 
 # --------------------------------------------------------------------------- #
-# Per-user runtime directory                                                  #
+# 每用户运行时目录                                                              #
 # --------------------------------------------------------------------------- #
 _DEFAULT_RUN_DIR = "run/collabllm/user_{uid}"
 
 
 def _resolve_run_user_dir() -> Path:
-    # 1) honour explicit env-var
+    # 1) 优先使用显式环境变量
     env_val = os.getenv("RUN_USER_DIR")
     if env_val:
         return Path(env_val).expanduser()
 
-    # 2) fall back to XDG-runtime-style path
+    # 2) 回退到类似 XDG runtime 的路径
     return Path(_DEFAULT_RUN_DIR.format(uid=os.getuid()))
 
 
@@ -122,9 +121,8 @@ os.environ["RUN_USER_DIR"] = str(RUN_USER_DIR)
 try:
     RUN_USER_DIR.mkdir(parents=True, exist_ok=True)
 except OSError as exc:
-    # If the runtime mount is not writable (EROFS) or missing (ENOENT)
-    # fall back to a per-user cache directory. This handles macOS where
-    # `/run` may not exist or is read-only.
+    # 如果运行时目录不可写（如只读文件系统 EROFS）或不存在（ENOENT），
+    # 则回退到每用户的 cache 目录。这解决了 macOS 上 `/run` 不存在或只读的问题。
     if exc.errno in {errno.EACCES, errno.ENOENT, errno.EROFS}:
         fallback = Path.home() / ".cache" / "collabllm"
         fallback.mkdir(parents=True, exist_ok=True)

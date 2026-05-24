@@ -45,3 +45,4 @@ node_modules/
 docs/
 .vercel
 llama.cpp/
+.serena/

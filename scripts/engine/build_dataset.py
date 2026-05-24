@@ -1,51 +1,10 @@
 """
-To run the following, you need:
-    - A dataset implemented under `examples/single_turn_ds`
-    - (Optional) Any custom metrics implemented under `examples/metrics`
+运行说明：
+需要：
+    - 一个实现于 `examples/single_turn_ds` 下的数据集类
+    - （可选）任何自定义的 metric，放在 `examples/metrics`
 
-Example Usage:
-On math-hard:
--------
-    python -m scripts.engine.build_dataset \
-        --dataset_name math-hard \
-        --metric_names "accuracy" "interactivity" "token_amount" \
-        --metric_weights 1 0.5 -0.5 \
-        --user_generation_kwargs '{"model": "gpt-4o"}' \
-        --user_prompt_file "collabllm/prompts/student_simulator.txt" \
-        --assistant_generation_kwargs '{"model": "gpt-4o", "temperature": 0.8}' \
-        --reward_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-        --output_dir outputs/multiturn_data \
-        --train_size 100 \
-        --num_candidate_responses 3 \
-        --hf_entity collabllm
-
-On medium:
--------
-    python -m scripts.engine.build_dataset \
-        --dataset_name medium \
-        --metric_names "document->bleu" "token_amount" \
-        --metric_weights 1 -0.1 \
-        --user_generation_kwargs '{"model": "gpt-4o"}' \
-        --assistant_generation_kwargs '{"model": "gpt-4o", "temperature": 0.9}' \
-        --reward_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-        --output_dir outputs/multiturn_data \
-        --train_size 200 \
-        --num_candidate_responses 3 \
-        --hf_entity collabllm
-
-On bigcodebench:
--------
-    python -m scripts.engine.build_dataset \
-        --dataset_name bigcodebench \
-        --metric_names "runnable code->pass_rate" "token_amount" \
-        --metric_weights 1 -0.5 \
-        --user_generation_kwargs '{"model": "gpt-4o"}' \
-        --assistant_generation_kwargs '{"model": "gpt-4o", "temperature": 0.8}' \
-        --reward_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-        --output_dir outputs/multiturn_data \
-        --train_size 200 \
-        --num_candidate_responses 3 \
-        --hf_entity collabllm
+示例用法见脚本注释中的命令行参数示例（保留原示例以供参考）。
 """
 
 import argparse
@@ -79,7 +38,7 @@ def data_engine(args):
     dataset_cls = datasets_info[args.dataset_name]["class"]
     task_desc = datasets_info[args.dataset_name]["task_desc"]
     dataset = dataset_cls().to_hf_dataset()
-    # Shuffle the dataset to ensure diverse coverage of topics and student types
+    # 对数据集进行打乱，以保证主题和学生类型的多样性覆盖
     shuffled_train = dataset["train"].shuffle(seed=42)
 
     repeat_sampling = False
@@ -111,7 +70,7 @@ def data_engine(args):
     else:
         train = shuffled_train
 
-    # Log distribution for verification
+    # 记录分布以便验证
     student_types_count = {}
     topics_count = set()
     for item in train:
@@ -158,7 +117,7 @@ def data_engine(args):
             )
             return
 
-    # Filter by simple counting
+    # 通过简单计数过滤（跳过已生成的样本）
     current_count = len(data_list)
     if current_count >= args.train_size:
         print(f"Already have {current_count} samples (>= {args.train_size}). Exiting.")
@@ -169,7 +128,7 @@ def data_engine(args):
     )
 
     pending_examples = []
-    # We assume 'train' is deterministic (seeded). We just skip the first `current_count` items.
+    # 假设 'train' 可复现（已固定随机种子）。我们直接跳过前 `current_count` 个样本。
     for idx, ex in enumerate(train):
         if idx < current_count:
             continue
@@ -185,7 +144,7 @@ def data_engine(args):
         print("No new examples to generate.")
         return
 
-    # Create a ThreadPoolExecutor with max_gen_workers threads
+    # 使用 ThreadPoolExecutor 并发生成（线程数由 --max_gen_workers 控制）
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=args.max_gen_workers
     ) as executor:
@@ -200,7 +159,7 @@ def data_engine(args):
                 sample_id = None
                 prompt_hash = compute_hash(example["single_turn_prompt"])
 
-            # Submit generate_multiturn_dataset using kwargs
+            # 提交任务：使用 kwargs 调用 generate_multiturn_dataset
             future = executor.submit(
                 generate_multiturn_dataset,
                 task_desc=task_desc,
@@ -224,7 +183,7 @@ def data_engine(args):
 
             future_to_hash[future] = prompt_hash
 
-        # Use tqdm to show progress as each future completes
+        # 使用 tqdm 显示并发任务完成进度
         for future in tqdm(
             concurrent.futures.as_completed(future_to_hash),
             total=len(future_to_hash),
@@ -246,11 +205,11 @@ def data_engine(args):
             data_list.append(multiturn_data)
             seen_prompt_hashes.add(prompt_hash)
 
-            # Write to JSON after each new conversation
+            # 每生成一条对话后写入 JSON 文件以防止数据丢失
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(data_list, f, indent=2, ensure_ascii=False)
 
-            # Push to Hugging Face Hub incrementally if entity is provided
+            # 如果提供了 HF 实体（组织/用户名），则增量推送到 Hugging Face Hub
             if args.hf_entity:
                 try:
                     MultiturnDataset(data_list).push_to_hub(

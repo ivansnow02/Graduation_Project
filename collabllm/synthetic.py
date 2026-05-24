@@ -35,30 +35,29 @@ def generate_multiturn_dataset(
     max_workers: int = 8,
     max_metric_workers: int = 8,
 ) -> Dict[str, Any]:
-    """
-    Generate a synthetic conversation in nested format:
-    {
-      "single_turn_prompt": ...,
-      "single_turn_completion": ...,
-      "single_turn_metadata": ...,
-      "turns": [
+        """生成嵌套格式的合成对话数据，结构如下：
         {
-          "prompt": [ ... messages up to user turn ... ],
-          "responses": [
-            {"completion": ..., "score": ...}, ...
-          ]
-        },
-        ...
-      ]
-    }
-    """
+            "single_turn_prompt": ...,
+            "single_turn_completion": ...,
+            "single_turn_metadata": ...,
+            "turns": [
+                {
+                    "prompt": [ ... 到用户轮的消息列表 ... ],
+                    "responses": [
+                        {"completion": ..., "score": ...}, ...
+                    ]
+                },
+                ...
+            ]
+        }
+        """
     reward_generation_kwargs = reward_generation_kwargs or {}
     metric_weights = metric_weights or [1.0] * len(metric_names)
 
     sim = ChatSessionSimulator()
     chat_history: List[Dict[str, str]] = []
 
-    # Shared simulation args
+    # 共享的模拟参数
     base_sim_args = {
         "task_desc": task_desc,
         "single_turn_prompt": single_turn_prompt,
@@ -69,7 +68,7 @@ def generate_multiturn_dataset(
         "user_generation_kwargs": user_generation_kwargs,
     }
 
-    # Nested structure to return
+    # 返回的嵌套结构
     multiturn_data: Dict[str, Any] = {
         "single_turn_prompt": single_turn_prompt,
         "single_turn_completion": single_turn_completion,
@@ -77,7 +76,7 @@ def generate_multiturn_dataset(
         "turns": [],
     }
 
-    # 1) initial user turn
+    # 1) 初始的用户轮
     first_user_msg = sim.run_chat_simulation(
         **base_sim_args,
         num_samples=1,
@@ -88,9 +87,9 @@ def generate_multiturn_dataset(
     )[0][-1]
     chat_history.append(first_user_msg)
 
-    # 2) loop to fill up to max_total_turns
+    # 2) 循环生成直到达到最大轮数
     while len(chat_history) < max_total_turns:
-        # a) sample assistant candidates
+        # a) 采样若干候选的助手回复
         candidate_hists = sim.run_chat_simulation(
             **base_sim_args,
             proact_prompt_ratio=proact_prompt_ratio,
@@ -107,12 +106,12 @@ def generate_multiturn_dataset(
             and candidate_hists[0]
             and candidate_hists[0][0].get("role") != "system"
         ):
-            # Optional logging if needed, or just silence
+            # 可选的日志记录（如需），通常不输出
             pass
         candidate_completions = [hist[-1]["content"] for hist in candidate_hists]
 
-        # b) score each candidate and record
-        turn_prompt = list(chat_history)  # copy up to user turn
+        # b) 对每个候选回复进行评分并记录
+        turn_prompt = list(chat_history)  # 复制到用户轮为止的历史
         responses_with_scores: List[Dict[str, Any]] = []
         scores: List[float] = []
         for completion in candidate_completions:
@@ -125,7 +124,7 @@ def generate_multiturn_dataset(
                 metadata=single_turn_metadata,
                 metric_weights=metric_weights,
                 chat_history=temp_history,
-                add_system_prompt_ratio=add_system_prompt_ratio,  # Pass ratio to reward simulation
+                add_system_prompt_ratio=add_system_prompt_ratio,  # 将该比例传递给奖励模拟
                 max_new_turns=max_new_turns,
                 num_samples=num_samples,
                 max_workers=max_workers,
@@ -166,7 +165,7 @@ def generate_multiturn_dataset(
             }
         )
 
-        # c) pick best assistant response
+        # c) 选取得分最高的助手回复
         best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
         best_response = responses_with_scores[best_idx]["completion"]
         chat_history.append({"role": "assistant", "content": best_response})
@@ -174,8 +173,8 @@ def generate_multiturn_dataset(
         if len(chat_history) >= max_total_turns:
             break
 
-        # d) select one user response
-        # get session with the max number of length
+        # d) 从生成的会话中选择一个用户回复作为下一轮用户输入
+        # 选择会话中长度（轮数）最大的那个
         sessions = sorted(
             responses_with_scores[best_idx]["sessions"].copy(), key=lambda x: len(x)
         )

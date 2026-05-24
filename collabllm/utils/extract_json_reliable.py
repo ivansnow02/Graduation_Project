@@ -1,3 +1,10 @@
+"""从输入字符串中提取并解析第一个 JSON 对象或数组。
+
+函数会在包含额外文本的响应中定位第一个左大括号或左中括号，裁剪并以一个
+轻量级解析器解析为 Python 对象（支持数字自动转换、三引号字符串等）。
+"""
+
+
 def extract_json(s):
     idx_brace = s.find("{")
     idx_bracket = s.find("[")
@@ -6,11 +13,11 @@ def extract_json(s):
         raise ValueError("No JSON object or array found")
 
     if idx_brace != -1 and (idx_bracket == -1 or idx_brace < idx_bracket):
-        # Object detected
+        # 检测到 JSON 对象（以 '{' 开始）
         json_start = idx_brace
         json_end = s.rfind("}")
     else:
-        # Array detected
+        # 检测到 JSON 数组（以 '[' 开始）
         json_start = idx_bracket
         json_end = s.rfind("]")
 
@@ -124,7 +131,7 @@ def parse_string(s, pos):
             result += escape_sequences.get(c, c)
         elif c == quote_char:
             pos += 1
-            # Attempt to convert to a number if possible
+            # 尝试将字符串内容转换为数字（如果可能的话）
             converted_value = convert_value(result)
             return converted_value, pos
         else:
@@ -145,7 +152,7 @@ def parse_triple_quoted_string(s, pos):
     while pos < len(s):
         if s[pos : pos + 3] == quote_str:
             pos += 3
-            # Attempt to convert to a number if possible
+            # 尝试将三引号字符串内容转换为数字（如可能）
             converted_value = convert_value(result)
             return converted_value, pos
         else:
@@ -194,4 +201,4 @@ def convert_value(value):
         else:
             return int(value)
     except ValueError:
-        return value  # Return as string if not a number
+        return value  # 如果不能转换为数字，则作为字符串返回

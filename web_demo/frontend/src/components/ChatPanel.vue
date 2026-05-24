@@ -12,7 +12,8 @@
         </button>
         <button v-else class="icon-btn" title="设置 Prompt" @click="$emit('openPrompt')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
           </svg>
         </button>
       </div>
@@ -26,15 +27,11 @@
       </div>
 
       <div class="message-feed">
-        <div
-          v-for="(msg, idx) in displayMessages"
-          :key="idx"
-          class="message-row"
-          :class="`role-${msg.role}`"
-        >
+        <div v-for="(msg, idx) in displayMessages" :key="idx" class="message-row" :class="`role-${msg.role}`">
           <div v-if="msg.role === 'assistant'" class="avatar assistant-avatar" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a10 10 0 1 0 10 10H12z"/><path d="M12 2a10 10 0 0 0 0 20V2z"/>
+              <path d="M12 2a10 10 0 1 0 10 10H12z" />
+              <path d="M12 2a10 10 0 0 0 0 20V2z" />
             </svg>
           </div>
           <div class="message-content">
@@ -47,19 +44,11 @@
                 已完成
               </div>
             </div>
-            <div
-              v-if="msg.annotationFields.length > 0"
-              class="annotation-row"
-              :class="{ selected: msg.annotationIndex === selectedAnnotationIndex }"
-              aria-label="客观评测 annotation"
-            >
-              <button
-                v-for="field in msg.annotationFields"
-                :key="`${field.key}-${field.label}`"
-                class="annotation-chip"
+            <div v-if="msg.annotationFields.length > 0" class="annotation-row"
+              :class="{ selected: msg.annotationIndex === selectedAnnotationIndex }" aria-label="客观评测 annotation">
+              <button v-for="field in msg.annotationFields" :key="`${field.key}-${field.label}`" class="annotation-chip"
                 :class="{ selected: msg.annotationIndex === selectedAnnotationIndex && selectedAnnotationField === field.key }"
-                @click="$emit('selectAnnotation', msg.annotationIndex, field.key)"
-              >
+                @click="$emit('selectAnnotation', msg.annotationIndex, field.key)">
                 <span class="annotation-label">{{ field.label }}</span>
                 <span class="annotation-value">{{ field.value }}</span>
               </button>
@@ -70,14 +59,18 @@
         <div v-if="streaming" class="message-row role-assistant">
           <div class="avatar assistant-avatar" aria-hidden="true">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a10 10 0 1 0 10 10H12z"/><path d="M12 2a10 10 0 0 0 0 20V2z"/>
+              <path d="M12 2a10 10 0 1 0 10 10H12z" />
+              <path d="M12 2a10 10 0 0 0 0 20V2z" />
             </svg>
           </div>
           <div class="message-content">
             <div class="message-bubble">
-              <div v-if="streamingText" class="markdown-body" v-html="renderMarkdown(streamingText, isCompleted(streamingText))"></div>
+              <div v-if="streamingText" class="markdown-body"
+                v-html="renderMarkdown(streamingText, isCompleted(streamingText))"></div>
               <div v-else class="typing-indicator">
-                <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
               </div>
             </div>
           </div>
@@ -94,116 +87,119 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, nextTick, ref, onMounted } from 'vue'
-import { marked } from 'marked'
-import type { AnnotationFieldKey, ObjectiveAnnotation } from '../composables/useEvaluation'
+// 组件说明：ChatPanel 展示一侧模型的聊天历史、流式生成与客观评测注释快捷查看。
+// 重要职责：渲染消息、显示流式生成状态、暴露选择 annotation 的事件。
+import { computed, watch, nextTick, ref, onMounted } from 'vue';
+import { marked } from 'marked';
+import type { AnnotationFieldKey, ObjectiveAnnotation } from '../composables/useEvaluation';
 
-type MessageRole = 'user' | 'assistant'
+type MessageRole = 'user' | 'assistant';
 
 interface AnnotationField {
-  key: AnnotationFieldKey
-  label: string
-  value: string
+  key: AnnotationFieldKey;
+  label: string;
+  value: string;
 }
 
 interface DisplayMessage {
-  role: MessageRole
-  content: string
-  completed?: boolean
-  annotationIndex: number
-  annotationFields: AnnotationField[]
+  role: MessageRole;
+  content: string;
+  completed?: boolean;
+  annotationIndex: number;
+  annotationFields: AnnotationField[];
 }
 
 const props = defineProps<{
-  side: string
-  chatMode?: string
-  modelName: string
-  promptName: string
-  messages: { role: string; content: string }[]
-  responses: Record<number, string>
-  streaming: boolean
-  streamingText: string
-  error: string
-  annotations?: ObjectiveAnnotation[]
-  selectedAnnotationIndex?: number
-  selectedAnnotationField?: AnnotationFieldKey | null
-}>()
+  side: string;
+  chatMode?: string;
+  modelName: string;
+  promptName: string;
+  messages: { role: string; content: string; }[];
+  responses: Record<number, string>;
+  streaming: boolean;
+  streamingText: string;
+  error: string;
+  annotations?: ObjectiveAnnotation[];
+  selectedAnnotationIndex?: number;
+  selectedAnnotationField?: AnnotationFieldKey | null;
+}>();
 
 defineEmits<{
-  openPrompt: []
-  openModel: []
-  selectAnnotation: [index: number, field: AnnotationFieldKey]
-}>()
+  openPrompt: [];
+  openModel: [];
+  selectAnnotation: [index: number, field: AnnotationFieldKey];
+}>();
 
-const messagesArea = ref<HTMLElement | null>(null)
-const bottomAnchor = ref<HTMLElement | null>(null)
+const messagesArea = ref<HTMLElement | null>(null);
+const bottomAnchor = ref<HTMLElement | null>(null);
 
-marked.setOptions({ breaks: true, gfm: true })
+marked.setOptions({ breaks: true, gfm: true });
 
 function renderMarkdown(text: string, completed = false): string {
-  if (!text) return ''
-  return marked.parse(toDisplayContent(text, completed)) as string
+  if (!text) return '';
+  // 使用 marked 渲染 markdown，同时先处理自定义的结束标记逻辑
+  return marked.parse(toDisplayContent(text, completed)) as string;
 }
 
 function stripCompletionMarker(text: string) {
-  return text.replace(/\s*\[结束\]\s*/g, '').trim()
+  return text.replace(/\s*\[结束\]\s*/g, '').trim();
 }
 
 function toDisplayContent(text: string, completed: boolean) {
-  const content = stripCompletionMarker(text)
-  if (content) return content
-  if (completed) return '本轮教学目标已完成。'
-  return ''
+  const content = stripCompletionMarker(text);
+  if (content) return content;
+  if (completed) return '本轮教学目标已完成。';
+  return '';
 }
 
 function isCompleted(text: string) {
-  return /\[结束\]/.test(text)
+  return /\[结束\]/.test(text);
 }
 
 function compactField(key: AnnotationFieldKey, label: string, value?: string): AnnotationField | null {
-  const normalized = value?.trim()
-  if (!normalized) return null
-  return { key, label, value: normalized }
+  const normalized = value?.trim();
+  if (!normalized) return null;
+  return { key, label, value: normalized };
 }
 
 function getAnnotationFields(role: MessageRole, annotation?: ObjectiveAnnotation): AnnotationField[] {
-  if (!annotation) return []
+  if (!annotation) return [];
   const fields =
     role === 'user'
       ? [
-          compactField('student_cognition_state', '认知', annotation.student_cognition_state),
-          compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
-          compactField('discipline', '学科', annotation.discipline),
-          compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
-        ]
+        compactField('student_cognition_state', '认知', annotation.student_cognition_state),
+        compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
+        compactField('discipline', '学科', annotation.discipline),
+        compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
+      ]
       : [
-          compactField('teacher_intent', '意图', annotation.teacher_intent),
-          compactField('teaching_strategy', '策略', annotation.teaching_strategy),
-          compactField('teacher_guidance_level', '引导', annotation.teacher_guidance_level),
-          compactField('discipline', '学科', annotation.discipline),
-          compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
-          compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
-        ]
-  return fields.filter((field): field is AnnotationField => Boolean(field))
+        compactField('teacher_intent', '意图', annotation.teacher_intent),
+        compactField('teaching_strategy', '策略', annotation.teaching_strategy),
+        compactField('teacher_guidance_level', '引导', annotation.teacher_guidance_level),
+        compactField('discipline', '学科', annotation.discipline),
+        compactField('discipline_transfer', '迁移', annotation.discipline_transfer),
+        compactField('cognitive_level', 'Bloom', annotation.cognitive_level),
+      ];
+  return fields.filter((field): field is AnnotationField => Boolean(field));
 }
 
 const displayMessages = computed(() => {
-  const result: DisplayMessage[] = []
-  const annotations = props.annotations ?? []
-  let annotationIndex = 0
+  const result: DisplayMessage[] = [];
+  const annotations = props.annotations ?? [];
+  let annotationIndex = 0;
   for (let i = 0; i < props.messages.length; i++) {
-    const msg = props.messages[i]
+    const msg = props.messages[i];
     if (msg.role === 'user') {
-      const response = props.responses[i]
-      const hasEvaluatedTurn = Boolean(msg.content.trim() && response?.trim())
-      const studentAnnotation = hasEvaluatedTurn ? annotations[annotationIndex] : undefined
-      const teacherAnnotation = hasEvaluatedTurn ? annotations[annotationIndex + 1] : undefined
+      const response = props.responses[i];
+      const hasEvaluatedTurn = Boolean(msg.content.trim() && response?.trim());
+      const studentAnnotation = hasEvaluatedTurn ? annotations[annotationIndex] : undefined;
+      const teacherAnnotation = hasEvaluatedTurn ? annotations[annotationIndex + 1] : undefined;
       result.push({
         role: 'user',
         content: msg.content,
         annotationIndex: hasEvaluatedTurn ? annotationIndex : -1,
         annotationFields: getAnnotationFields('user', studentAnnotation),
-      })
+      });
       if (response !== undefined) {
         result.push({
           role: 'assistant',
@@ -211,38 +207,42 @@ const displayMessages = computed(() => {
           completed: isCompleted(response),
           annotationIndex: hasEvaluatedTurn ? annotationIndex + 1 : -1,
           annotationFields: getAnnotationFields('assistant', teacherAnnotation),
-        })
-        if (hasEvaluatedTurn) annotationIndex += 2
+        });
+        if (hasEvaluatedTurn) annotationIndex += 2;
       }
     }
   }
-  return result
-})
+  return result;
+});
+
+// displayMessages 负责将原始 messages/responses 与 annotations 对齐，
+// 输出适合渲染的扁平消息列表：每个学生消息后紧跟助手回复（若存在），
+// 并为每条消息绑定对应的 annotation 索引与快速展示字段。
 
 function scrollToBottom() {
-  const area = messagesArea.value
-  if (!area) return
-  area.scrollTop = area.scrollHeight
-  bottomAnchor.value?.scrollIntoView({ block: 'end' })
+  const area = messagesArea.value;
+  if (!area) return;
+  area.scrollTop = area.scrollHeight;
+  bottomAnchor.value?.scrollIntoView({ block: 'end' });
 }
 
 function scheduleScrollToBottom() {
   nextTick(() => {
-    scrollToBottom()
+    scrollToBottom();
     requestAnimationFrame(() => {
-      scrollToBottom()
-      window.setTimeout(scrollToBottom, 0)
-    })
-  })
+      scrollToBottom();
+      window.setTimeout(scrollToBottom, 0);
+    });
+  });
 }
 
 watch(
   [() => props.streamingText, () => props.streaming, () => displayMessages.value.length],
   scheduleScrollToBottom,
   { flush: 'post' }
-)
+);
 
-onMounted(scheduleScrollToBottom)
+onMounted(scheduleScrollToBottom);
 </script>
 
 <style scoped>
@@ -335,6 +335,7 @@ onMounted(scheduleScrollToBottom)
   transition: all var(--transition-fast);
   white-space: nowrap;
 }
+
 .action-text-btn:hover {
   background: var(--bg-input);
   color: var(--text-primary);
@@ -353,6 +354,7 @@ onMounted(scheduleScrollToBottom)
   transition: all var(--transition-fast);
   width: 32px;
 }
+
 .icon-btn:hover {
   background: var(--bg-input);
   color: var(--text-primary);

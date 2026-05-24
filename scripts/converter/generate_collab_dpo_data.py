@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate DPO data in collabllm nested format.
+"""生成 DPO 数据，输出为 collabllm 的嵌套格式。
 
-- Uses baseline dialogues (chosen) from SID_benchmark/output/dialog/qwen-4b
-- Uses an SFT model (rejected) to generate counter-responses
-- Produces nested JSON compatible with `collabllm.datasets.MultiturnDataset`
+- 使用来自 `SID_benchmark/output/dialog/qwen-4b` 的基线对话（chosen）
+- 使用 SFT 模型或 API 生成被拒绝的对照回复（rejected）
+- 输出为与 `collabllm.datasets.MultiturnDataset` 兼容的嵌套 JSON
 """
 
 import argparse
@@ -14,7 +14,7 @@ from copy import deepcopy
 
 import requests
 
-# import torch
+# import torch  # 如需本地生成，可取消注释并使用本地 model+tokenizer
 from tqdm import tqdm
 
 
@@ -134,7 +134,7 @@ def main():
 
     os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
-    # Decide generation backend: API preferred, fallback to local if api_base is empty
+    # 选择生成后端：优先使用 API，若未提供 api_base 则回退到本地模型
     use_api = bool(args.api_base)
     model = tokenizer = None
 
@@ -184,7 +184,7 @@ def main():
                     if single_turn_prompt is None:
                         single_turn_prompt = content
                 elif role_cn == "教师":
-                    # Need at least one user message before a teacher reply
+                    # 需要至少一条用户消息，教师回复前必须有用户历史
                     if not history:
                         history.append({"role": "assistant", "content": content})
                         continue
@@ -208,7 +208,7 @@ def main():
                         #         max_new_tokens=args.max_new_tokens,
                         #     )
                     except Exception as e:
-                        print(f"[WARN] rejected generation failed at {conv_id}: {e}")
+                        print(f"[WARN] 生成 rejected 回复失败 ({conv_id}): {e}")
                         continue
 
                     turn_entry = {

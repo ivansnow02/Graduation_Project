@@ -12,13 +12,8 @@
             <div class="form-group">
               <label>预设策略</label>
               <div class="preset-list">
-                <button
-                  v-for="p in presetPrompts"
-                  :key="p.id"
-                  class="preset-item"
-                  :class="{ active: selectedPresetId === p.id }"
-                  @click="selectPreset(p)"
-                >
+                <button v-for="p in presetPrompts" :key="p.id" class="preset-item"
+                  :class="{ active: selectedPresetId === p.id }" @click="selectPreset(p)">
                   <div class="preset-name">{{ p.name }}</div>
                   <div class="preset-desc">{{ p.description }}</div>
                 </button>
@@ -27,13 +22,8 @@
 
             <div class="form-group">
               <label for="prompt-content">Prompt 内容 <span class="hint">（可自由编辑）</span></label>
-              <textarea
-                id="prompt-content"
-                v-model="localContent"
-                class="prompt-textarea"
-                rows="8"
-                placeholder="输入你的 System Prompt..."
-              ></textarea>
+              <textarea id="prompt-content" v-model="localContent" class="prompt-textarea" rows="8"
+                placeholder="输入你的 System Prompt..."></textarea>
             </div>
           </div>
 
@@ -48,47 +38,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { presetPrompts, type PresetPrompt } from '../data/presets'
+// 组件说明：PromptEditor 提供系统提示词（System Prompt）的可视化编辑与预设选择。
+// 行为：保存时通过事件将修改回传父组件，支持预设与自定义两种模式。
+import { ref, watch } from 'vue';
+import { presetPrompts, type PresetPrompt } from '../data/presets';
 
 const props = defineProps<{
-  visible: boolean
-  side: string
-  currentPrompt: string
-}>()
+  visible: boolean;
+  side: string;
+  currentPrompt: string;
+}>();
 
 const emit = defineEmits<{
-  close: []
-  save: [payload: { content: string; name: string }]
-}>()
+  close: [];
+  save: [payload: { content: string; name: string; }];
+}>();
 
-const selectedPresetId = ref('')
-const localContent = ref('')
+const selectedPresetId = ref('');
+const localContent = ref('');
 
 watch(() => props.visible, (v) => {
   if (v) {
-    localContent.value = props.currentPrompt
-    const match = presetPrompts.find(p => p.content === props.currentPrompt)
-    selectedPresetId.value = match ? match.id : ''
+    localContent.value = props.currentPrompt;
+    const match = presetPrompts.find(p => p.content === props.currentPrompt);
+    selectedPresetId.value = match ? match.id : '';
   }
-})
+});
 
 function selectPreset(p: PresetPrompt) {
-  selectedPresetId.value = p.id
+  selectedPresetId.value = p.id;
   if (p.id !== 'custom') {
-    localContent.value = p.content
+    localContent.value = p.content;
   }
 }
 
 function handleSave() {
-  const name = presetPrompts.find(p => p.id === selectedPresetId.value)?.name || ''
-  emit('save', { content: localContent.value, name })
-  emit('close')
+  const name = presetPrompts.find(p => p.id === selectedPresetId.value)?.name || '';
+  emit('save', { content: localContent.value, name });
+  emit('close');
 }
 
 function handleClear() {
-  localContent.value = ''
-  selectedPresetId.value = ''
+  localContent.value = '';
+  selectedPresetId.value = '';
 }
 </script>
 
@@ -128,70 +120,158 @@ function handleClear() {
 }
 
 .close-btn {
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
-  background: transparent; border: none;
-  color: var(--text-secondary); font-size: 1.2rem;
-  cursor: pointer; border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
-.close-btn:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
 
-.modal-body { padding: 20px 24px; overflow-y: auto; max-height: 60vh; }
-
-.form-group { margin-bottom: 16px; }
-.form-group label {
-  display: block; font-size: 0.8rem; font-weight: 500;
-  color: var(--text-secondary); margin-bottom: 8px;
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
 }
-.hint { font-weight: 400; color: var(--text-tertiary); }
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
 
 .preset-list {
-  display: flex; flex-direction: column; gap: 6px;
-  max-height: 240px; overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 .preset-item {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 11px 14px; background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border-primary); border-radius: var(--radius-md);
-  cursor: pointer; transition: all var(--transition-fast);
-  text-align: left; font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  font-family: var(--font-sans);
 }
-.preset-item:hover { border-color: var(--border-secondary); background: rgba(255,255,255,0.07); }
-.preset-item.active { border-color: var(--border-accent); background: rgba(255,255,255,0.1); }
 
-.preset-name { font-size: 0.85rem; font-weight: 500; color: var(--text-primary); }
-.preset-desc { font-size: 0.75rem; color: var(--text-tertiary); }
+.preset-item:hover {
+  border-color: var(--border-secondary);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.preset-item.active {
+  border-color: var(--border-accent);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.preset-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.preset-desc {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
 
 .prompt-textarea {
-  width: 100%; padding: 12px 14px;
-  background: var(--bg-input); border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md); color: var(--text-primary);
-  font-family: var(--font-sans); font-size: 0.85rem; line-height: 1.6;
-  resize: vertical; outline: none; min-height: 120px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  min-height: 120px;
   transition: all var(--transition-fast);
 }
-.prompt-textarea:focus { border-color: var(--border-accent); box-shadow: 0 0 0 3px rgba(255,255,255,0.08); }
-.prompt-textarea::placeholder { color: var(--text-tertiary); }
+
+.prompt-textarea:focus {
+  border-color: var(--border-accent);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.prompt-textarea::placeholder {
+  color: var(--text-tertiary);
+}
 
 .modal-footer {
-  display: flex; justify-content: flex-end; gap: 10px;
-  padding: 16px 24px; border-top: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-primary);
 }
+
 .btn-secondary {
-  padding: 8px 20px; border-radius: var(--radius-md);
-  border: 1px solid var(--border-secondary); background: transparent;
-  color: var(--text-secondary); font-family: var(--font-sans);
-  font-size: 0.85rem; cursor: pointer; transition: all var(--transition-fast);
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
-.btn-secondary:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
+
+.btn-secondary:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+
 .btn-primary {
-  padding: 8px 20px; border-radius: var(--radius-md); border: none;
-  background: var(--gradient-primary); color: #171717;
-  font-family: var(--font-sans); font-size: 0.85rem; font-weight: 650;
-  cursor: pointer; transition: all var(--transition-fast);
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--gradient-primary);
+  color: #171717;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all var(--transition-fast);
   box-shadow: var(--shadow-sm);
 }
-.btn-primary:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
 </style>

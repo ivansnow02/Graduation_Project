@@ -31,10 +31,10 @@ def generate_singleturn_dataset(
     max_workers: int = 8,
 ) -> Dict[str, Any]:
     """
-    Generate a synthetic conversation in nested format for Vanilla DPO experiments.
-    Differences from `generate_multiturn_dataset`:
-    - DOES NOT loop to simulate future turns.
-    - Uses `singleturn_reward` to score ONLY the immediate candidate response.
+    为 Vanilla DPO 实验生成嵌套格式的合成对话数据。
+    与 `generate_multiturn_dataset` 的区别：
+    - 不会循环模拟未来的多轮对话。
+    - 使用 `singleturn_reward` 仅对当前候选回复进行评分。
     """
     reward_generation_kwargs = reward_generation_kwargs or {}
     metric_weights = metric_weights or [1.0] * len(metric_names)
@@ -42,7 +42,7 @@ def generate_singleturn_dataset(
     sim = ChatSessionSimulator()
     chat_history: List[Dict[str, str]] = []
 
-    # Shared simulation args
+    # 共享的模拟参数
     base_sim_args = {
         "task_desc": task_desc,
         "single_turn_prompt": single_turn_prompt,
@@ -53,7 +53,7 @@ def generate_singleturn_dataset(
         "user_generation_kwargs": user_generation_kwargs,
     }
 
-    # Nested structure to return
+    # 返回的嵌套结构
     multiturn_data: Dict[str, Any] = {
         "single_turn_prompt": single_turn_prompt,
         "single_turn_completion": single_turn_completion,
@@ -61,7 +61,7 @@ def generate_singleturn_dataset(
         "turns": [],
     }
 
-    # 1) initial user turn
+    # 1) 初始用户轮
     first_user_msg = sim.run_chat_simulation(
         **base_sim_args,
         num_samples=1,
@@ -72,9 +72,9 @@ def generate_singleturn_dataset(
     )[0][-1]
     chat_history.append(first_user_msg)
 
-    # 2) loop to fill up to max_total_turns
+    # 2) 循环生成直到达到最大轮数
     while len(chat_history) < max_total_turns:
-        # a) sample assistant candidates
+        # a) 采样助手候选回复
         candidate_hists = sim.run_chat_simulation(
             **base_sim_args,
             proact_prompt_ratio=proact_prompt_ratio,
@@ -82,22 +82,24 @@ def generate_singleturn_dataset(
             chat_history=chat_history,
             add_system_prompt_ratio=add_system_prompt_ratio,
             max_workers=max_workers,
-            max_new_turns=1,  # Generate ONLY the next assistant turn
+            max_new_turns=1,  # 仅生成下一条助手回复
             verbose=False,
             log_prefix="[Candidate] ",
         )
-        
-        candidate_completions = [hist[-1]["content"] for hist in candidate_hists if hist]
-        
+
+        candidate_completions = [
+            hist[-1]["content"] for hist in candidate_hists if hist
+        ]
+
         if not candidate_completions:
             logger.warning("No candidate completions generated. Terminating early.")
             break
 
-        # b) score each candidate using SINGLE-TURN reward (no future simulation)
-        turn_prompt = list(chat_history)  # copy up to user turn
+        # b) 使用单轮奖励对每个候选进行评分（不模拟未来）
+        turn_prompt = list(chat_history)  # 复制到用户轮为止的历史
         responses_with_scores: List[Dict[str, Any]] = []
         scores: List[float] = []
-        
+
         for completion in candidate_completions:
             temp_history = chat_history + [{"role": "assistant", "content": completion}]
             rewards = singleturn_reward(
@@ -110,17 +112,17 @@ def generate_singleturn_dataset(
                 metric_weights=metric_weights,
             )
             score = rewards.get("MR", 0.0)
-            
-            responses_with_scores.append(
-                {
-                    "completion": completion,
-                    "score": score,
-                    "rewards": rewards,
-                }
-            )
+
+            responses_with_scores.append({
+                "completion": completion,
+                "score": score,
+                "rewards": rewards,
+            })
             scores.append(score)
 
-        logger.info(f"\n\nResponses and single-turn scores (Turn {len(chat_history) // 2}):")
+        logger.info(
+            f"\n\nResponses and single-turn scores (Turn {len(chat_history) // 2}):"
+        )
         logger.info(
             json.dumps(
                 [
@@ -136,14 +138,12 @@ def generate_singleturn_dataset(
             )
         )
 
-        multiturn_data["turns"].append(
-            {
-                "prompt": strip_system_prompt(turn_prompt.copy()),
-                "responses": responses_with_scores,
-            }
-        )
+        multiturn_data["turns"].append({
+            "prompt": strip_system_prompt(turn_prompt.copy()),
+            "responses": responses_with_scores,
+        })
 
-        # c) pick best assistant response to continue the conversation thread
+        # c) 选取得分最高的助手回复，继续对话线程
         best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
         best_response = responses_with_scores[best_idx]["completion"]
         chat_history.append({"role": "assistant", "content": best_response})
@@ -151,20 +151,20 @@ def generate_singleturn_dataset(
         if len(chat_history) >= max_total_turns:
             break
 
-        # d) simulate the NEXT user turn given the best assistant response
+        # d) 基于最佳助手回复模拟下一条用户回复
         next_user_hists = sim.run_chat_simulation(
-             **base_sim_args,
+            **base_sim_args,
             num_samples=1,
             chat_history=chat_history,
             max_new_turns=1,
             max_workers=1,
             verbose=False,
         )
-        
+
         if not next_user_hists or not next_user_hists[0]:
-            logger.warning("Failed to generate next user turn. Terminating early.")
+            logger.warning("未能生成下一条用户回复，提前终止。")
             break
-            
+
         next_user_msg = next_user_hists[0][-1]
         chat_history.append({"role": "user", "content": next_user_msg["content"]})
 

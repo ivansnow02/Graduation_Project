@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 PEFT_CHECKPOINT_SUFFIX = "-peft-checkpoint"
 
-# Valid VLLM sampling parameters
+# 有效的 vLLM 采样参数
 VALID_VLLM_SAMPLING_PARAMS = {
     "n",
     "best_of",
@@ -55,7 +55,7 @@ VALID_VLLM_SAMPLING_PARAMS = {
 
 
 class ChatSessionSimulator:
-    """Manages multiple simultaneous chat sessions."""
+    """管理多个并发的聊天会话。"""
 
     # --------------------------------------------------------------------------- #
     # ChatSessionSimulator.run_chat_simulation                                    #
@@ -80,15 +80,15 @@ class ChatSessionSimulator:
         log_prefix: str = "",
     ) -> List[List[Dict[str, str]]]:
         """
-        Simulate *num_samples* conversations in parallel (internally batched).
+        并行模拟 `num_samples` 条对话（内部使用批处理/并发）。
 
-        Returns
+        返回
         -------
         List[List[Dict[str, str]]]
-            A list of `num_samples` full chat transcripts.
+            长度为 `num_samples` 的完整对话转录列表。
         """
         # ------------------------------------------------------------------ #
-        # 0 · Validation / defaults                                          #
+        # 0 · 参数校验与默认值                                                 #
         # ------------------------------------------------------------------
         self._validate_session_inputs(
             task_desc,
@@ -102,16 +102,16 @@ class ChatSessionSimulator:
         )
 
         # ------------------------------------------------------------------ #
-        # 1 · Per-conversation state                                         #
+        # 1 · 每个会话的初始状态                                                #
         # ------------------------------------------------------------------ #
         sessions: List[List[Dict[str, str]]] = [
             copy.deepcopy(chat_history or []) for _ in range(num_samples)
         ]
-        # for increasing sample diversity
+        # 为了增加样本的多样性，在部分会话中注入 system prompt
         for sess in sessions[: int(num_samples * add_system_prompt_ratio)]:
             sess.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
-        # DEBUG: Verify System Prompt Insertion
+        # 调试：验证 system prompt 是否已正确插入
         if sessions and len(sessions) > 0:
             has_system = len(sessions[0]) > 0 and sessions[0][0].get("role") == "system"
             logger.info(
@@ -119,7 +119,7 @@ class ChatSessionSimulator:
             )
 
         current_roles = [self._determine_starting_role(hist) for hist in sessions]
-        active: set[int] = set(range(num_samples))  # indices still alive
+        active: set[int] = set(range(num_samples))  # 当前仍处于活动状态的会话索引
 
         user_sims = [
             UserSimulator(
@@ -130,7 +130,7 @@ class ChatSessionSimulator:
             for _ in range(num_samples)
         ]
 
-        # Optional PEFT materialisation for vLLM
+        # 可选：为 vLLM 准备 PEFT 检查点（若本地模型包含 peft_config）
         model_name = assistant_generation_kwargs.get("model")
         if (
             vllm_base_model is not None
@@ -140,9 +140,11 @@ class ChatSessionSimulator:
             self._write_peft_checkpoint(local_model, model_name)
 
         # ------------------------------------------------------------------ #
-        # 2 · Conversation loop (respects max_new_turns budget)              #
+        # 2 · 对话循环（遵守每会话的 max_new_turns 预算）                         #
         # ------------------------------------------------------------------ #
-        msg_budget = [max_new_turns for _ in range(num_samples)]  # ← NEW
+        msg_budget = [
+            max_new_turns for _ in range(num_samples)
+        ]  # 每条会话的剩余消息预算
         active: set[int] = {i for i, b in enumerate(msg_budget) if b > 0}
 
         pbar = tqdm(
@@ -152,7 +154,7 @@ class ChatSessionSimulator:
         )
 
         while active:
-            # ---------- USER TURNS ---------------------------------------- #
+            # ---------- 用户回合 (USER TURNS) ----------------------------- #
             user_idx = [i for i in active if current_roles[i] == "user"]
             if user_idx:
                 with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -162,7 +164,7 @@ class ChatSessionSimulator:
                     for fut in as_completed(fut_to_i):
                         i = fut_to_i[fut]
                         resp = fut.result()
-                        # Cleanup: remove user simulator state description like "(1) Student..."
+                        # 清理：删除用户模拟器返回中的状态描述（例如 "(1) Student..."）
                         import re
 
                         resp = re.sub(r"^（\d+）.*?\n", "", resp).strip()
@@ -173,7 +175,7 @@ class ChatSessionSimulator:
 
                         msg_budget[i] -= 1
 
-                        # early exit checks
+                        # 提前退出检查
                         if msg_budget[i] == 0 or self._should_terminate_conversation(
                             resp
                         ):
@@ -183,15 +185,15 @@ class ChatSessionSimulator:
                             current_roles[i] = "assistant"
                     pbar.update(1)
 
-            if not active:  # all dialogues exhausted their budget / terminated
+            if not active:  # 所有对话均耗尽预算或已终止
                 break
 
-            # ---------- ASSISTANT TURNS ----------------------------------- #
+            # ---------- 助手回合 (ASSISTANT TURNS) ------------------------- #
             asst_idx = [i for i in active if current_roles[i] == "assistant"]
             if not asst_idx:
                 continue
 
-            # --- generate assistant replies (batched or threaded) --- #
+            # --- 生成助手回复（批量或并发） --- #
             if local_model is None and vllm_base_model is None:
                 num_asst = len(asst_idx)
                 cutoff = int(num_asst * proact_prompt_ratio)
@@ -227,7 +229,7 @@ class ChatSessionSimulator:
                     )
                 responses = {g: r for g, r in zip(asst_idx, outs)}
 
-            # --- post-process assistant replies --- #
+            # --- 后处理助手回复 --- #
             for i, resp in responses.items():
                 self._log_response(
                     f"assistant (Turn {len(sessions[i])})", resp, prefix=log_prefix
@@ -250,7 +252,7 @@ class ChatSessionSimulator:
         self,
         batch_sess: List[List[Dict[str, str]]],
     ) -> List[List[Dict[str, str]]]:
-        """Inject diverse system personas for contrastive candidate generation."""
+        """为对比式候选生成注入多样化的 system persona（系统角色提示）。"""
         persona_prompts = (
             SYSTEM_PROMPT_SOCRATIC_STRICT,
             SYSTEM_PROMPT_DIRECT_ANSWER,
@@ -272,7 +274,7 @@ class ChatSessionSimulator:
         return injected_batch
 
     # ------------------------------------------------------------------ #
-    # Batch generators                                                   #
+    # 批量生成器（Batch generators）                                     #
     # ------------------------------------------------------------------ #
     def _batch_generate_with_vllm(
         self,
@@ -283,7 +285,7 @@ class ChatSessionSimulator:
         generation_kwargs: Dict[str, Any],
         return_outputs: bool = False,
     ) -> List[str]:
-        """Batched vLLM generation (returns list of responses)."""
+        """vLLM 的批量生成接口（返回回复文本列表）。"""
         from vllm.lora.request import LoRARequest
 
         sampling_params = self._convert_to_sampling_params(generation_kwargs)
@@ -294,7 +296,7 @@ class ChatSessionSimulator:
         else:
             lora_req = None
 
-        # vLLM can accept a list of message histories; returns list[str]
+        # vLLM 接受消息历史列表作为输入；返回 list[str]
         if is_conversational({"prompt": batch_messages[0]}):
             outs = vllm_base_model.chat(
                 batch_messages,
@@ -323,7 +325,7 @@ class ChatSessionSimulator:
         local_tokenizer,
         generation_kwargs: Dict[str, Any],
     ) -> List[str]:
-        """Batched HF generation (one forward pass)."""
+        """HuggingFace 的批量生成（一次前向计算）。"""
         torch.cuda.empty_cache()
         local_tokenizer.padding_side = "left"
         local_tokenizer.pad_token = local_tokenizer.eos_token
@@ -338,19 +340,19 @@ class ChatSessionSimulator:
 
         generation_kwargs = copy.deepcopy(generation_kwargs)
         max_new = generation_kwargs.pop("max_tokens", 1024)
-        generation_kwargs.pop("model", None)  # not needed for HF pipeline
-        prompts = [msgs for msgs in batch_messages]  # HF pipeline accepts list
+        generation_kwargs.pop("model", None)  # 对 HF pipeline 来说无需传入 model
+        prompts = [msgs for msgs in batch_messages]  # HF pipeline 接受消息列表
         outputs = generator(
             prompts,
             max_new_tokens=max_new,
             **generation_kwargs,
         )
 
-        # Extract only the newly generated part for each item
+        # 提取每个输出中新生成的文本部分
         results = []
         for prompt_msgs, out in zip(prompts, outputs):
             if isinstance(out, list):
-                out = out[0]  # HF pipeline returns list of dicts
+                out = out[0]  # HF pipeline 返回的是 dict 列表，取首项
             full_text = out["generated_text"]
 
             if isinstance(prompt_msgs, str):
@@ -361,29 +363,29 @@ class ChatSessionSimulator:
         return results
 
     # ------------------------------------------------------------------ #
-    # … the rest of the helper methods (_validate_session_inputs, etc.)  #
+    # 以下为辅助方法（参数校验、PEFT 管理等）                             #
     # ------------------------------------------------------------------ #
     def _write_peft_checkpoint(self, local_model, model_name: str):
         """
-        Write the PEFT checkpoint for the local model if required.
+        将本地模型保存为 PEFT 检查点（如需）。
 
-        Args:
-            local_model: The local model instance to save
-            model_name: Name of the assistant model
+        参数:
+            local_model: 要保存的本地模型实例
+            model_name: 助手模型名称
 
-        Returns:
-            Path to the saved PEFT checkpoint directory
+        返回:
+            已保存的 PEFT 检查点目录路径
 
-        Raises:
-            FileNotFoundError: If unable to create or access the run user directory
+        抛出:
+            FileNotFoundError: 如果无法创建或访问运行时用户目录
         """
 
         peft_dir = self._get_peft_dir(model_name)
 
-        # Ensure PEFT directory exists
+        # 确保 PEFT 目录存在
         os.makedirs(peft_dir, exist_ok=True)
 
-        # Save local model as PEFT checkpoint
+        # 将本地模型保存为 PEFT 检查点
         local_model.save_pretrained(peft_dir)
         logger.debug(f"Saved PEFT checkpoint to {peft_dir}")
 
@@ -401,12 +403,12 @@ class ChatSessionSimulator:
         user_generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
-        Sanity-check all arguments before starting a chat session.
+        在开始会话前对所有参数进行基本校验。
 
-        Raises
+        抛出
         ------
         ValueError
-            If any invariant required by the session runner is violated.
+            若有任何不满足运行器要求的不变量则抛出。
         """
         if not isinstance(task_desc, str) or not task_desc.strip():
             raise ValueError("`task_desc` must be a non-empty string.")
@@ -430,20 +432,20 @@ class ChatSessionSimulator:
             raise ValueError("`user_generation_kwargs` must include a 'model' key.")
 
     def _determine_starting_role(self, chat_history: List[Dict[str, str]]) -> str:
-        """Determine which role should start the conversation."""
+        """决定对话应由哪个角色开始（user 或 assistant）。"""
         if chat_history and chat_history[-1]["role"] == "user":
             return "assistant"
         return "user"
 
     def _get_peft_dir(self, model_name: str) -> str:
         """
-        Get the directory for the PEFT checkpoint.
+        获取 PEFT 检查点目录路径。
 
-        Args:
-            model_name: Name of the assistant model
+        参数:
+            model_name: 助手模型名称
 
-        Returns:
-            Path to the PEFT checkpoint directory
+        返回:
+            PEFT 检查点目录路径
         """
         run_user_dir = os.environ.get("RUN_USER_DIR")
         return os.path.join(
@@ -452,20 +454,20 @@ class ChatSessionSimulator:
 
     def _convert_to_sampling_params(self, generation_kwargs: Dict[str, Any]):
         """
-        Convert generation kwargs to VLLM SamplingParams.
+        将 generation kwargs 转换为 vLLM 的 SamplingParams 实例。
 
-        Args:
-            generation_kwargs: Dictionary of generation parameters
+        参数:
+            generation_kwargs: 生成参数字典
 
-        Returns:
-            SamplingParams instance for VLLM
+        返回:
+            适用于 vLLM 的 SamplingParams 实例
         """
         from vllm.sampling_params import SamplingParams
 
-        # Filter valid parameters
+        # 过滤出有效的采样参数
         generation_kwargs = copy.deepcopy(generation_kwargs)
         generation_kwargs.pop("model", None)  # 'model' is not a sampling param
-        sampling_kwargs = {"max_tokens": 1024}  # Default max_tokens
+        sampling_kwargs = {"max_tokens": 1024}  # 默认 max_tokens
         unmapped_params = []
 
         for key, value in generation_kwargs.items():
@@ -474,7 +476,7 @@ class ChatSessionSimulator:
             else:
                 unmapped_params.append(key)
 
-        # Log unmapped parameters
+        # 记录未映射的参数
         if unmapped_params:
             logger.warning(f"Unmapped VLLM parameters: {unmapped_params}")
 

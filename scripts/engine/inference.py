@@ -1,61 +1,8 @@
 #!/usr/bin/env python3
 """
-Parallel multiturn inference with per-example metric collection.
+并行多轮推理脚本，按样本收集评估指标并聚合结果。
 
-Example run:
-Inference for the base model:
-On medium dataset:
--------
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node=8 --master_port=56900 -m scripts.engine.inference \
-    --dataset_name medium \
-    --model_name meta-llama/Llama-3.1-8B-Instruct \
-    --output_dir outputs/base/collabllm-multiturn-medium/inference-user4o \
-    --eval_metric_names "document->bleu" "interactivity" "token_amount" \
-    --user_generation_kwargs '{"model": "gpt-4o"}' \
-    --assistant_generation_kwargs '{"model": "meta-llama/Llama-3.1-8B-Instruct", "temperature": 0.8}' \
-    --eval_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-    --eval_size 20
-
-On math-hard dataset:
--------
-CUDA_VISIBLE_DEVICES=6,7 torchrun --nproc_per_node=2 --master_port=56900 -m scripts.engine.inference \
-    --dataset_name math-hard \
-    --model_name meta-llama/Llama-3.1-8B-Instruct \
-    --output_dir outputs/base/collabllm-multiturn-math-hard/inference-4o \
-    --eval_metric_names accuracy interactivity token_amount \
-    --user_generation_kwargs '{"model": "gpt-4o"}' \
-    --assistant_generation_kwargs '{"model": "meta-llama/Llama-3.1-8B-Instruct", "temperature": 0.6}' \
-    --eval_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-    --eval_size 50
-
-Inference for collallm models:
-On medium dataset:
--------
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node=8 --master_port=56900 -m scripts.engine.inference \
-    --dataset_name medium \
-    --model_name outputs/offline_dpo_from_base/collabllm-multiturn-medium/ \
-    --output_dir outputs/offline_dpo_from_base/collabllm-multiturn-medium/inference-user4o \
-    --eval_metric_names "document->bleu" "interactivity" "token_amount" \
-    --user_generation_kwargs '{"model": "gpt-4o"}' \
-    --assistant_generation_kwargs '{"model": "offline_dpo_from_base-medium-Llama-3.1-8B-Instruct", "temperature": 0.8}' \
-    --eval_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-    --eval_size 20 \
-    --use_lora \
-    --add_system_prompt
-
-On math-hard dataset:
--------
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node=8 --master_port=56900 -m scripts.engine.inference \
-    --dataset_name math-hard \
-    --model_name outputs/offline_dpo_from_base/collabllm-multiturn-math-hard/ \
-    --output_dir outputs/offline_dpo_from_base/collabllm-multiturn-math-hard/inference-4o \
-    --eval_metric_names accuracy interactivity token_amount \
-    --user_generation_kwargs '{"model": "gpt-4o"}' \
-    --assistant_generation_kwargs '{"model": "offline_dpo_from_base-math-hard-Llama-3.1-8B-Instruct", "temperature": 0.6}' \
-    --eval_generation_kwargs '{"model": "claude-3-5-sonnet-latest"}' \
-    --eval_size 50 \
-    --use_lora \
-    --add_system_prompt
+示例运行命令见注释（包含基模型与 collabllm 模型的多卡 torchrun 用法）。
 """
 
 import os
@@ -88,7 +35,7 @@ logger = logging.getLogger(__name__)
 def parse_args():
     p = argparse.ArgumentParser("Distributed multiturn inference")
 
-    # LoRA config
+    # LoRA 配置
     p.add_argument("--peft_r", type=int, default=32)
     p.add_argument("--peft_alpha", type=int, default=16)
     p.add_argument(
@@ -97,7 +44,7 @@ def parse_args():
         default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
     )
 
-    # Evaluation + model
+    # 评估与模型相关参数
     p.add_argument("--eval_size", type=int, default=500)
     p.add_argument("--max_new_tokens", type=int, default=2048)
     p.add_argument("--max_model_len", type=int, default=8196)
@@ -221,7 +168,7 @@ def main():
         else None
     )
 
-    # Bits-and-bytes
+    # Bits-and-bytes（量化）配置
     bnb_cfg = (
         BitsAndBytesConfig(
             load_in_4bit=args.use_4bit,
@@ -235,7 +182,7 @@ def main():
 
     torch.cuda.empty_cache()
 
-    # Load model
+    # 加载模型
     model, tok, vllm = load_model_and_tokenizer(
         model_name=args.model_name,
         lora_cfg=lora_cfg,
@@ -251,11 +198,11 @@ def main():
         "assistant_generation_kwargs": args.assistant_generation_kwargs,
         "user_generation_kwargs": args.user_generation_kwargs,
     }
-    # Run local inference
+    # 本地推理（针对每个样本采样一个对话并评估）
     local_results = []
     for ex in tqdm(testset, desc=f"Rank {rank} processing examples"):
         chat_history = ChatSessionSimulator().run_chat_simulation(
-            num_samples=1,  # sample one conversation
+            num_samples=1,  # 每个样本采样一条对话
             chat_history=None,
             max_new_turns=args.max_turns,
             task_desc=task_desc,
@@ -268,7 +215,7 @@ def main():
 
         metrics = multiturn_aware_reward(
             num_samples=1,
-            max_new_turns=0,  # evaluate the current chat
+            max_new_turns=0,  # 仅评估当前对话
             task_desc=task_desc,
             single_turn_prompt=ex["single_turn_prompt"],
             single_turn_completion=ex["single_turn_completion"],
@@ -284,7 +231,7 @@ def main():
         metrics = {k: float(np.mean(v)) for k, v in metrics.items()}
         local_results.append((metrics, chat_history))
 
-    # Gather full results across all ranks
+    # 在所有 rank 之间收集结果
     gathered_results = [None for _ in range(world_size)]
     dist.all_gather_object(gathered_results, local_results)
 
@@ -292,7 +239,7 @@ def main():
         merged = [entry[0] for shard in gathered_results for entry in shard]
         all_pairs = [entry for shard in gathered_results for entry in shard]
 
-        # Also log global average
+        # 计算并记录全局平均指标
         metric_names = args.eval_metric_names
         metrics = {k: [] for k in metric_names}
         for item in merged:

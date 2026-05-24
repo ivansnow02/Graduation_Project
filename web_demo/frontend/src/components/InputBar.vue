@@ -1,25 +1,20 @@
 <template>
   <div class="input-floating-wrapper">
     <div class="input-container">
-      <textarea
-        ref="inputRef"
-        v-model="inputText"
-        class="composer-input"
-        placeholder="输入学生问题..."
-        rows="1"
-        @keydown.enter.exact="handleSend"
-        @input="autoResize"
-      ></textarea>
-      
+      <textarea ref="inputRef" v-model="inputText" class="composer-input" placeholder="输入学生问题..." rows="1"
+        @keydown.enter.exact="handleSend" @input="autoResize"></textarea>
+
       <div class="input-actions">
         <button v-if="isStreaming" class="action-btn stop-btn" @click="$emit('stop')" title="停止生成">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>
+            <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
           </svg>
         </button>
-        <button v-else class="action-btn send-btn" :class="{ 'is-active': inputText.trim() }" :disabled="!inputText.trim()" @click="handleSend()" title="发送">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="arrow-up" stroke-width="2" stroke="currentColor">
-            <path d="M12 19V5M5 12l7-7 7 7"/>
+        <button v-else class="action-btn send-btn" :class="{ 'is-active': inputText.trim() }"
+          :disabled="!inputText.trim()" @click="handleSend()" title="发送">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="arrow-up" stroke-width="2"
+            stroke="currentColor">
+            <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>
       </div>
@@ -29,43 +24,45 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue'
+// 组件说明：输入栏（InputBar）负责收集学生问题并触发发送/停止事件。
+// UX：按 Enter 发送（Shift+Enter 保持换行），输入框自动高度适配。
+import { ref, nextTick, onMounted, watch } from 'vue';
 
-const props = defineProps<{ isStreaming: boolean }>()
-const emit = defineEmits<{ send: [content: string]; stop: [] }>()
+const props = defineProps<{ isStreaming: boolean; }>();
+const emit = defineEmits<{ send: [content: string]; stop: []; }>();
 
-const inputText = ref('')
-const inputRef = ref<HTMLTextAreaElement | null>(null)
+const inputText = ref('');
+const inputRef = ref<HTMLTextAreaElement | null>(null);
 
 function handleSend(e?: KeyboardEvent) {
-  if (e?.shiftKey) return
-  e?.preventDefault()
-  if (!inputText.value.trim() || props.isStreaming) return
-  emit('send', inputText.value.trim())
-  inputText.value = ''
+  if (e?.shiftKey) return;
+  e?.preventDefault();
+  if (!inputText.value.trim() || props.isStreaming) return;
+  emit('send', inputText.value.trim());
+  inputText.value = '';
   nextTick(() => {
-    if (!inputRef.value) return
-    inputRef.value.style.height = 'auto'
-    inputRef.value.focus()
-  })
+    if (!inputRef.value) return;
+    inputRef.value.style.height = 'auto';
+    inputRef.value.focus();
+  });
 }
 
 function autoResize() {
-  const el = inputRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+  const el = inputRef.value;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
 }
 
 onMounted(() => {
-  inputRef.value?.focus()
-})
+  inputRef.value?.focus();
+});
 
 watch(() => props.isStreaming, (isStreaming) => {
   if (!isStreaming) {
-    nextTick(() => inputRef.value?.focus())
+    nextTick(() => inputRef.value?.focus());
   }
-})
+});
 </script>
 
 <style scoped>

@@ -19,8 +19,14 @@ class UserSimulator(object):
         require_json: bool = True,
         **llm_kwargs,
     ):
-        """
-        Initialize the UserSimulator model.
+        """初始化 `UserSimulator`。
+
+        参数说明：
+            task_desc: 任务描述文本。
+            single_turn_prompt: 单轮 prompt 文本。
+            prompt_template: 可选的自定义模板字符串。
+            require_json: 是否强制要求 LLM 输出 JSON 格式。
+            llm_kwargs: 传递给 LLM 的额外参数。
         """
         super().__init__()
         self.task_desc = task_desc
@@ -31,7 +37,7 @@ class UserSimulator(object):
 
         self.llm_kwargs = {"temperature": 1.0, "max_tokens": 1024, **llm_kwargs}
 
-        # Support base_url for vLLM/OpenAI compatible backends
+        # 支持使用 base_url 字段来兼容 vLLM/OpenAI 风格的后端配置
         if "base_url" in self.llm_kwargs:
             self.llm_kwargs["api_base"] = self.llm_kwargs.pop("base_url")
 
@@ -56,7 +62,7 @@ class UserSimulator(object):
                     **self.llm_kwargs,
                     messages=messages,
                     num_retries=self.num_retries,
-                    extra_body={"chat_template_kwargs": {"enable_thinking": False}}
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
                 .choices[0]
                 .message.content
@@ -69,7 +75,7 @@ class UserSimulator(object):
                 if isinstance(full_response, str):
                     full_response = extract_json(full_response)
             except Exception as e:
-                logger.error(f"[UserSimulator] Error extracting JSON: {e}")
+                logger.error(f"[UserSimulator] JSON 提取错误: {e}")
                 continue
 
             if isinstance(full_response, dict):
@@ -79,7 +85,7 @@ class UserSimulator(object):
                     break
                 else:
                     logger.error(
-                        f"[UserSimulator] Keys {keys} do not match expected keys. Retrying..."
+                        f"[UserSimulator] 返回键 {keys} 与预期不匹配，正在重试..."
                     )
                     continue
 

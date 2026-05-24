@@ -5,38 +5,34 @@ from collabllm.datasets.multiturn import MultiturnDataset
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert Multiturn Dataset to DPO format"
+    parser = argparse.ArgumentParser(description="将 Multiturn 数据集转换为 DPO 格式")
+    parser.add_argument(
+        "--input_file", type=str, required=True, help="输入 JSON/JSONL 文件路径"
     )
     parser.add_argument(
-        "--input_file", type=str, required=True, help="Path to input JSON/JSONL file"
+        "--output_dir", type=str, required=True, help="保存输出文件的目录"
     )
-    parser.add_argument(
-        "--output_dir", type=str, required=True, help="Directory to save output files"
-    )
-    parser.add_argument(
-        "--eval_ratio", type=float, default=0.1, help="Evaluation split ratio"
-    )
+    parser.add_argument("--eval_ratio", type=float, default=0.1, help="评估集拆分比例")
 
     args = parser.parse_args()
 
-    # Check input file
+    # 检查输入文件是否存在
     if not os.path.exists(args.input_file):
-        print(f"Error: Input file '{args.input_file}' not found.")
+        print(f"错误：未找到输入文件 '{args.input_file}'。")
         sys.exit(1)
 
     print(f"Loading dataset from {args.input_file}...")
     ds = MultiturnDataset(args.input_file)
 
-    print("Converting to DPO format...")
+    print("正在转换为 DPO 格式...")
     dpo_ds = ds.to_dpo_dataset(eval_ratio=args.eval_ratio)
 
-    # Ensure output directory exists
+    # 确保输出目录存在
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print(f"Saving to {args.output_dir}...")
-    # Save manually to control format if needed, or use save_to_disk / to_json
-    # Save manually to control format (ensure_ascii=False)
+    print(f"保存到 {args.output_dir}...")
+    # 如果需要可手动控制保存格式，否则可使用 save_to_disk / to_json
+    # 这里手动保存以确保编码和格式（ensure_ascii=False）
     import json
 
     for split, dataset in dpo_ds.items():

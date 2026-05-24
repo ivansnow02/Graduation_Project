@@ -1,9 +1,9 @@
 """
-Single-turn reward computation for DPO ablation experiments.
+单轮奖励计算，用于 DPO 消融实验。
 
-Assumes:
-• We do not simulate future turns to get a "multiturn-aware" score.
-• We evaluate the quality of the immediate response given the chat history.
+假设：
+• 不模拟未来回合来获取多轮感知得分（multiturn-aware）。
+• 仅评估给定对话历史下即时回复的质量。
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
-# Metric helper                                                               #
+# Metric 辅助函数（评分器封装）                                                #
 # --------------------------------------------------------------------------- #
 def _score_one_metric(
     metric_name: str,
@@ -41,7 +41,7 @@ def _score_one_metric(
 
 
 # --------------------------------------------------------------------------- #
-# Public API                                                                  #
+# 公共 API                                                                     #
 # --------------------------------------------------------------------------- #
 def singleturn_reward(
     *,
@@ -54,17 +54,18 @@ def singleturn_reward(
     metric_weights: Sequence[float] | None = None,
 ) -> Dict[str, float]:
     """
-    Compute rewards for a single conversation history ending with a candidate response.
+    计算以候选回复结尾的单条对话历史的奖励。
+    返回一个字典，包含每个 metric 的分数及合成的 "MR" 分数。
     """
     reward_generation_kwargs = reward_generation_kwargs or {}
     metric_weights = metric_weights or [1.0] * len(metric_names)
     if len(metric_weights) != len(metric_names):
         raise ValueError("`metric_weights` length must equal `metric_names` length")
 
-    # 1. Strip system message
+    # 1. 去除 system 消息
     messages = strip_system_prompt(chat_history)
 
-    # 2. Evaluate metrics
+    # 2. 计算各项指标得分
     reward_dict: Dict[str, float] = {}
     mr_score = 0.0
 
@@ -81,5 +82,5 @@ def singleturn_reward(
         mr_score += score * metric_weights[i]
 
     reward_dict["MR"] = mr_score
-    
+
     return reward_dict

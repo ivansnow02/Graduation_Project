@@ -1,23 +1,23 @@
 /**
  * useLLM - 直接使用 OpenAI SDK 调用 LLM API（支持 vLLM / DashScope 等兼容端点）
  */
-import OpenAI from 'openai'
+import OpenAI from "openai";
 
 export interface ModelConfig {
-  name: string
-  apiKey: string
-  baseUrl: string
+  name: string;
+  apiKey: string;
+  baseUrl: string;
 }
 
 export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
 interface StreamCallbacks {
-  onChunk: (chunk: string) => void
-  onDone: () => void
-  onError: (error: string) => void
+  onChunk: (chunk: string) => void;
+  onDone: () => void;
+  onError: (error: string) => void;
 }
 
 export function useLLM() {
@@ -29,7 +29,7 @@ export function useLLM() {
       apiKey: model.apiKey,
       baseURL: model.baseUrl,
       dangerouslyAllowBrowser: true, // 演示系统，允许浏览器端使用
-    })
+    });
   }
 
   /**
@@ -40,10 +40,10 @@ export function useLLM() {
     messages: ChatMessage[],
     { onChunk, onDone, onError }: StreamCallbacks,
     options?: { temperature?: number; maxTokens?: number },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<void> {
     try {
-      const client = createClient(model)
+      const client = createClient(model);
 
       const stream = await client.chat.completions.create(
         {
@@ -53,22 +53,23 @@ export function useLLM() {
           temperature: options?.temperature ?? 0.8,
           max_tokens: options?.maxTokens ?? 2048,
         },
-        { signal }
-      )
+        { signal },
+      );
 
       for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content
+        const delta = chunk.choices[0]?.delta?.content;
         if (delta) {
-          onChunk(delta)
+          onChunk(delta);
         }
-        if (chunk.choices[0]?.finish_reason === 'stop') {
-          break
+        if (chunk.choices[0]?.finish_reason === "stop") {
+          break;
         }
       }
-      onDone()
+      onDone();
     } catch (err: any) {
-      if (err?.name === 'AbortError') return
-      onError(err?.message || String(err))
+      if (err?.name === "AbortError") return;
+      // 把发生的错误以字符串形式回传给调用方，调用方负责展示或处理
+      onError(err?.message || String(err));
     }
   }
 
@@ -76,9 +77,10 @@ export function useLLM() {
     model: ModelConfig,
     messages: ChatMessage[],
     options?: { temperature?: number; maxTokens?: number },
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<string> {
-    const client = createClient(model)
+    // 同步（非流式）生成接口：用于评测请求或一次性完成场景
+    const client = createClient(model);
     const response = await client.chat.completions.create(
       {
         model: model.name,
@@ -87,10 +89,10 @@ export function useLLM() {
         temperature: options?.temperature ?? 0.1,
         max_tokens: options?.maxTokens ?? 2048,
       },
-      { signal }
-    )
-    return response.choices[0]?.message?.content ?? ''
+      { signal },
+    );
+    return response.choices[0]?.message?.content ?? "";
   }
 
-  return { streamChat, completeChat }
+  return { streamChat, completeChat };
 }

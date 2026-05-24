@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
-# 1. Abstract interface                                                       #
+# 1. 抽象接口                                                                  #
 # --------------------------------------------------------------------------- #
 class BaseMetric(abc.ABC):
-    """Every metric must implement `score` and declare the keys it returns."""
+    """每个度量（metric）必须实现 `score` 方法，并声明其返回的键（keys）。"""
 
     @abc.abstractmethod
     def score(  # noqa: D401  (imperative mood is OK here)
@@ -29,24 +29,23 @@ class BaseMetric(abc.ABC):
 
 
 # --------------------------------------------------------------------------- #
-# 2. Generic driver                                                           #
+# 2. 通用驱动                                                                  #
 # --------------------------------------------------------------------------- #
 class SingleTurnOrChatMetric:
     """
-    A wrapper that (optionally) turns a multi-turn chat log into a *final
-    completion*, then runs a concrete metric on the resulting text pair.
+    一个包装类：可选地将多轮对话日志提取为最终的输出（final completion），
+    然后在提取出的文本对上运行具体的度量（metric）。
 
-    The *signature* string is inspired by DSPy:
+    *signature* 字符串参考自 DSPy：
 
-        "<extract_type>-><metric_name>"   e.g.  "document->bert_score"
-        "<metric_name>"                   e.g.  "toxicity"
+        "<extract_type>-><metric_name>"   例如 "document->bert_score"
+        "<metric_name>"                   例如 "toxicity"
 
-    • If `->` is present we first extract a `<extract_type>` artefact
-      (document, answer, policy, …) from the full history via an LLM call.
-    • In either case we then run `<metric_name>` to obtain numeric scores.
+    • 当包含 `->` 时，先通过 LLM 从完整历史中抽取 `<extract_type>`（文档、答案、策略等）。
+    • 随后使用 `<metric_name>` 计算并返回数值评分。
     """
 
-    # Registry so users can add metrics with a one-liner
+    # 注册表，用户可以通过一行装饰器将自定义 metric 注册进来
     _METRIC_REGISTRY: Dict[str, type[BaseMetric]] = {}
 
     def __init__(self, signature: str, **llm_kwargs: Any):
@@ -76,7 +75,7 @@ class SingleTurnOrChatMetric:
         single_turn_completion: str,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Union[float, Dict[str, float]]:
-        """Main entry-point."""
+        """主入口点：被外部调用以对单轮或多轮对话进行评分。"""
         if self.extract_type:
             completion = self._extract_final_completion(messages, metadata)
         else:
@@ -86,9 +85,10 @@ class SingleTurnOrChatMetric:
             single_turn_prompt, single_turn_completion, completion, messages, metadata
         )
 
-    # -------------------------- helpers ------------------------------------ #
+    # -------------------------- 辅助方法 ------------------------------------ #
     @staticmethod
     def _parse_signature(sig: str) -> Tuple[Optional[str], str]:
+        # 解析签名：如果包含 '->' 则分割为 (extract_type, metric_name)，否则只有 metric_name
         return sig.split("->", 1) if "->" in sig else (None, sig)
 
     def _extract_final_completion(
@@ -96,7 +96,7 @@ class SingleTurnOrChatMetric:
         messages: List[Dict[str, str]],
         metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Ask an LLM to distil the final artefact from `messages`."""
+        """调用 LLM 从 `messages` 中提取最终产物（final artefact）。"""
         prefix_msg = (
             "Addtional requirement:\n"
             if metadata and "extraction_requirement" in metadata
@@ -123,29 +123,28 @@ class SingleTurnOrChatMetric:
                 if isinstance(response, str)
                 else response  # Already parsed
             )
-            logger.info("Extractor output: %s", payload)
+            logger.info("Extractor 输出: %s", payload)
+            # 验证提取结果包含预期字段 'thought' 和 'final_completion'
             if not (
                 isinstance(payload, dict)
                 and {"thought", "final_completion"} <= payload.keys()
             ):
-                raise ValueError("Unexpected keys in extraction payload.")
+                raise ValueError("提取结果键不符合预期。")
             return payload["final_completion"]
 
         except Exception as e:
-            logger.error("Failed to extract JSON: %s", e)
-            raise RuntimeError(
-                "Could not parse extractor output; see logs for details."
-            ) from e
+            logger.error("JSON 提取失败: %s", e)
+            raise RuntimeError("无法解析 extractor 的输出；详细信息请查看日志。") from e
 
     # ---------------------- registration decorator ------------------------- #
     @classmethod
     def register_metric(cls, name: str):
-        """Decorator to make `metric_cls` available in the registry."""
+        """装饰器：将 `metric_cls` 注册到全局注册表中，供签名调用使用。"""
 
         def _decorator(metric_cls: type[BaseMetric]):
             if name in cls._METRIC_REGISTRY:
                 logger.warning(
-                    f"Overwriting existing metric '{name}' with {metric_cls.__name__}."
+                    f"将用 {metric_cls.__name__} 覆盖已存在的 metric '{name}'。"
                 )
             cls._METRIC_REGISTRY[name] = metric_cls
             return metric_cls
@@ -156,9 +155,9 @@ class SingleTurnOrChatMetric:
 
 
 # --------------------------------------------------------------------------- #
-# 3. Standard Metrics Registration                                           #
+# 3. 标准度量（Metrics）注册                                                  #
 # --------------------------------------------------------------------------- #
-# Import standard metrics to register them
+# 导入并注册标准的 metric 实现
 try:
     from collabllm.metrics.teaching_quality import TeachingQualityMetric
 
