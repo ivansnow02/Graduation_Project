@@ -2,28 +2,14 @@
 """
 将清洗后的 TeachingSession 数据转换为 CollabLLM 标准格式的脚本。
 
-支持多种输入格式和输出格式：
-  - 输入: JSON/JSONL 文件（包含 TeachingSession 数据）或已清洗的对象列表
-  - 输出: CollabLLM 嵌套格式（用于 MultiturnDataset）或扁平格式
+支持多种输入和输出格式：
+- 输入：JSON/JSONL 文件（包含 TeachingSession 数据）或已清洗的对象列表
+- 输出：CollabLLM 嵌套格式（用于 MultiturnDataset）或扁平格式
 
 用法示例：
-  # 转换为嵌套格式（推荐）
-  python3 scripts/converter/convert_annotated_to_sft.py \
-      --input_dir data/cleaned \
-      --output_path data/collabllm/nested.json \
-      --format nested
-
-  # 转换为扁平格式
-  python3 scripts/converter/convert_annotated_to_sft.py \
-      --input_file data/cleaned.jsonl \
-      --output_path data/collabllm/flat.jsonl \
-      --format flat
-
-  # 进行聚合（多个回复合并）
-  python3 scripts/converter/convert_annotated_to_sft.py \
-      --input_dir data/cleaned \
-      --output_path data/collabllm/aggregated.json \
-      --format nested_agg
+- 转换为嵌套格式（推荐）
+- 转换为扁平格式
+- 进行聚合（多个回复合并）
 """
 
 import argparse
@@ -52,20 +38,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
 # 数据加载
-# ============================================================================
 
 
 def load_teaching_sessions(path: str) -> List[TeachingSession]:
     """
     从 JSON/JSONL 文件加载 TeachingSession 对象。
 
-    Args:
-        path: 文件路径（.json 或 .jsonl）或目录（递归查找所有 .json/.jsonl）
+        Args:
+            path: 文件路径（.json 或 .jsonl）或目录（递归查找所有 .json/.jsonl）。
 
-    Returns:
-        TeachingSession 列表
+        Returns:
+            TeachingSession 列表。
     """
     sessions = []
 
@@ -113,7 +97,7 @@ def load_teaching_sessions(path: str) -> List[TeachingSession]:
 
 
 def save_json(data: Any, path: str) -> None:
-    """保存为 JSON 文件"""
+    """保存为 JSON 文件。"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -121,7 +105,7 @@ def save_json(data: Any, path: str) -> None:
 
 
 def save_jsonl(data: List[Dict[str, Any]], path: str) -> None:
-    """保存为 JSONL 文件"""
+    """保存为 JSONL 文件。"""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for item in data:
@@ -129,9 +113,7 @@ def save_jsonl(data: List[Dict[str, Any]], path: str) -> None:
     logger.info(f"Saved {len(data)} items to {path}")
 
 
-# ============================================================================
 # 主程序
-# ============================================================================
 
 
 def main():

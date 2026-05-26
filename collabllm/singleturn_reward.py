@@ -1,9 +1,9 @@
 """
-单轮奖励计算，用于 DPO 消融实验。
+collabllm.singleturn_reward
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+单轮奖励计算工具。
 
-假设：
-• 不模拟未来回合来获取多轮感知得分（multiturn-aware）。
-• 仅评估给定对话历史下即时回复的质量。
+该模块用于只评估当前回复质量的场景，常见于单轮训练与 DPO 消融实验。
 """
 
 from __future__ import annotations
@@ -17,9 +17,7 @@ from collabllm.utils.template import strip_system_prompt
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------------------------- #
-# Metric 辅助函数（评分器封装）                                                #
-# --------------------------------------------------------------------------- #
+# Metric helper
 def _score_one_metric(
     metric_name: str,
     messages: List[Dict[str, str]],
@@ -40,9 +38,7 @@ def _score_one_metric(
     return cast(float, res)
 
 
-# --------------------------------------------------------------------------- #
-# 公共 API                                                                     #
-# --------------------------------------------------------------------------- #
+# 公共 API
 def singleturn_reward(
     *,
     single_turn_prompt: str,

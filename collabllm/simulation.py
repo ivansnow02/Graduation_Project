@@ -1,4 +1,4 @@
-# chat_session_simulator.py
+"""聊天会话模拟器。"""
 from __future__ import annotations
 
 import os
@@ -57,9 +57,6 @@ VALID_VLLM_SAMPLING_PARAMS = {
 class ChatSessionSimulator:
     """管理多个并发的聊天会话。"""
 
-    # --------------------------------------------------------------------------- #
-    # ChatSessionSimulator.run_chat_simulation                                    #
-    # --------------------------------------------------------------------------- #
     def run_chat_simulation(
         self,
         *,
@@ -82,14 +79,10 @@ class ChatSessionSimulator:
         """
         并行模拟 `num_samples` 条对话（内部使用批处理/并发）。
 
-        返回
-        -------
-        List[List[Dict[str, str]]]
+        Returns:
             长度为 `num_samples` 的完整对话转录列表。
         """
-        # ------------------------------------------------------------------ #
-        # 0 · 参数校验与默认值                                                 #
-        # ------------------------------------------------------------------
+        # 0. 参数校验与默认值
         self._validate_session_inputs(
             task_desc,
             single_turn_prompt,
@@ -101,9 +94,7 @@ class ChatSessionSimulator:
             user_generation_kwargs,
         )
 
-        # ------------------------------------------------------------------ #
-        # 1 · 每个会话的初始状态                                                #
-        # ------------------------------------------------------------------ #
+        # 1. 每个会话的初始状态
         sessions: List[List[Dict[str, str]]] = [
             copy.deepcopy(chat_history or []) for _ in range(num_samples)
         ]
@@ -111,7 +102,7 @@ class ChatSessionSimulator:
         for sess in sessions[: int(num_samples * add_system_prompt_ratio)]:
             sess.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
 
-        # 调试：验证 system prompt 是否已正确插入
+        # 验证 system prompt 是否已正确插入
         if sessions and len(sessions) > 0:
             has_system = len(sessions[0]) > 0 and sessions[0][0].get("role") == "system"
             logger.info(
@@ -139,12 +130,7 @@ class ChatSessionSimulator:
         ):
             self._write_peft_checkpoint(local_model, model_name)
 
-        # ------------------------------------------------------------------ #
-        # 2 · 对话循环（遵守每会话的 max_new_turns 预算）                         #
-        # ------------------------------------------------------------------ #
-        msg_budget = [
-            max_new_turns for _ in range(num_samples)
-        ]  # 每条会话的剩余消息预算
+        msg_budget = [max_new_turns for _ in range(num_samples)]  # 剩余消息预算
         active: set[int] = {i for i, b in enumerate(msg_budget) if b > 0}
 
         pbar = tqdm(
@@ -154,7 +140,7 @@ class ChatSessionSimulator:
         )
 
         while active:
-            # ---------- 用户回合 (USER TURNS) ----------------------------- #
+            # 用户回合
             user_idx = [i for i in active if current_roles[i] == "user"]
             if user_idx:
                 with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -164,7 +150,7 @@ class ChatSessionSimulator:
                     for fut in as_completed(fut_to_i):
                         i = fut_to_i[fut]
                         resp = fut.result()
-                        # 清理：删除用户模拟器返回中的状态描述（例如 "(1) Student..."）
+                        # 清理：删除用户模拟器返回中的状态描述
                         import re
 
                         resp = re.sub(r"^（\d+）.*?\n", "", resp).strip()
@@ -188,12 +174,12 @@ class ChatSessionSimulator:
             if not active:  # 所有对话均耗尽预算或已终止
                 break
 
-            # ---------- 助手回合 (ASSISTANT TURNS) ------------------------- #
+            # 助手回合
             asst_idx = [i for i in active if current_roles[i] == "assistant"]
             if not asst_idx:
                 continue
 
-            # --- 生成助手回复（批量或并发） --- #
+            # 生成助手回复（批量或并发）
             if local_model is None and vllm_base_model is None:
                 num_asst = len(asst_idx)
                 cutoff = int(num_asst * proact_prompt_ratio)
@@ -229,7 +215,7 @@ class ChatSessionSimulator:
                     )
                 responses = {g: r for g, r in zip(asst_idx, outs)}
 
-            # --- 后处理助手回复 --- #
+            # 后处理助手回复
             for i, resp in responses.items():
                 self._log_response(
                     f"assistant (Turn {len(sessions[i])})", resp, prefix=log_prefix
@@ -273,9 +259,7 @@ class ChatSessionSimulator:
 
         return injected_batch
 
-    # ------------------------------------------------------------------ #
-    # 批量生成器（Batch generators）                                     #
-    # ------------------------------------------------------------------ #
+    # 批量生成器
     def _batch_generate_with_vllm(
         self,
         batch_messages: List[List[Dict[str, str]]],
@@ -362,22 +346,20 @@ class ChatSessionSimulator:
         torch.cuda.empty_cache()
         return results
 
-    # ------------------------------------------------------------------ #
-    # 以下为辅助方法（参数校验、PEFT 管理等）                             #
-    # ------------------------------------------------------------------ #
+    # 以下为辅助方法（参数校验、PEFT 管理等）
     def _write_peft_checkpoint(self, local_model, model_name: str):
         """
         将本地模型保存为 PEFT 检查点（如需）。
 
-        参数:
-            local_model: 要保存的本地模型实例
-            model_name: 助手模型名称
+        Args:
+            local_model: 要保存的本地模型实例。
+            model_name: 助手模型名称。
 
-        返回:
-            已保存的 PEFT 检查点目录路径
+        Returns:
+            已保存的 PEFT 检查点目录路径。
 
-        抛出:
-            FileNotFoundError: 如果无法创建或访问运行时用户目录
+        Raises:
+            FileNotFoundError: 如果无法创建或访问运行时用户目录。
         """
 
         peft_dir = self._get_peft_dir(model_name)
@@ -441,10 +423,10 @@ class ChatSessionSimulator:
         """
         获取 PEFT 检查点目录路径。
 
-        参数:
+        Args:
             model_name: 助手模型名称
 
-        返回:
+        Returns:
             PEFT 检查点目录路径
         """
         run_user_dir = os.environ.get("RUN_USER_DIR")
@@ -456,10 +438,10 @@ class ChatSessionSimulator:
         """
         将 generation kwargs 转换为 vLLM 的 SamplingParams 实例。
 
-        参数:
+        Args:
             generation_kwargs: 生成参数字典
 
-        返回:
+        Returns:
             适用于 vLLM 的 SamplingParams 实例
         """
         from vllm.sampling_params import SamplingParams

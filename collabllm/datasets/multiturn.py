@@ -5,14 +5,14 @@ collabllm.datasets.multiturn
 
 初始化支持三种输入形式：
 
-1. **扁平列表** (`List[dict]`)，每行包含必需字段：
+1. 扁平列表 (`List[dict]`)，每行包含必需字段：
      {'prompt', 'completion', 'conv_id', 'score',
         'single_turn_prompt', 'single_turn_completion', 'single_turn_metadata'}
 
-2. **嵌套结构**（每个对话为一个 dict）：
+2. 嵌套结构（每个对话为一个 dict）：
      参考文件中常见的嵌套格式，包含 conv_id、turns 等字段。
 
-3. **本地 HF 数据集目录**（`Dataset.save_to_disk` 保存的目录）或 **HF Hub 仓库 ID**（字符串）。
+3. 本地 HF 数据集目录（`Dataset.save_to_disk` 保存的目录）或 HF Hub 仓库 ID（字符串）。
 
 内部统一将数据转换为扁平的 `self.data`（List[dict]），包含字段：
 {prompt, completion, conv_id, score, single_turn_prompt, single_turn_completion,
@@ -20,13 +20,13 @@ collabllm.datasets.multiturn
 
 派生字段说明
 -------------
-• 若未显式给出，`turn_id` 将被设置为 `len(prompt)`。
+- 若未显式给出，`turn_id` 将被设置为 `len(prompt)`。
 
 转换器（均使用均匀随机拆分）
 --------------------------------
-• `to_sft_dataset()`   → DatasetDict {messages}
-• `to_dpo_dataset()`   → DatasetDict {prompt, chosen, rejected, score_*}
-• `to_inputs_dataset()`→ DatasetDict {prompt, single_turn_*}
+- `to_sft_dataset()` -> DatasetDict {messages}
+- `to_dpo_dataset()` -> DatasetDict {prompt, chosen, rejected, score_*}
+- `to_inputs_dataset()` -> DatasetDict {prompt, single_turn_*}
 """
 
 from __future__ import annotations
@@ -55,9 +55,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------------------------- #
-# 均匀拆分器 (uniform splitter)
-# --------------------------------------------------------------------------- #
+# 均匀拆分器
 def _uniform_split(
     full_ds: Dataset,
     *,
@@ -78,9 +76,7 @@ def _uniform_split(
     })
 
 
-# --------------------------------------------------------------------------- #
 # 主数据类
-# --------------------------------------------------------------------------- #
 class MultiturnDataset:
     def __init__(
         self,
@@ -90,14 +86,14 @@ class MultiturnDataset:
         add_system_prompt: bool = True,
     ):
         """
-        参数说明：
-        data_or_local_dir_or_hf_repo_or_nested :
-            • 扁平字典列表（旧格式），或
-            • 嵌套对话列表（新格式），或
-            • 本地由 `Dataset.save_to_disk` 保存的目录路径，或
-            • HF Hub 仓库 ID（如 "org/dataset"）。
-        seed : int
-            用于均匀拆分的随机种子。
+        Args:
+            data_or_local_dir_or_hf_repo_or_nested:
+                扁平字典列表（旧格式），或嵌套对话列表（新格式），或本地由
+                `Dataset.save_to_disk` 保存的目录路径，或 HF Hub 仓库 ID。
+            seed:
+                用于均匀拆分的随机种子。
+            add_system_prompt:
+                是否在每条样本前添加系统消息。
         """
         self.seed = seed
         self.sys_msg = (
@@ -196,7 +192,7 @@ class MultiturnDataset:
         split : Optional[str]
             If provided, will save only this split (e.g., "train", "eval").
 
-        Returns
+        Returns:
         -------
         DatasetDict
             The pushed dataset.
@@ -281,9 +277,7 @@ class MultiturnDataset:
                     })
         return flat
 
-    # ------------------------------------------------------------------ #
-    # SFT（监督微调）                                                      #
-    # ------------------------------------------------------------------ #
+    # SFT（监督微调）
     def to_sft_dataset(
         self,
         *,
@@ -347,9 +341,7 @@ class MultiturnDataset:
             full_dataset, eval_ratio=eval_ratio, n_eval=n_eval, seed=self.seed
         )
 
-    # ------------------------------------------------------------------ #
-    # DPO（偏好对比优化）                                                   #
-    # ------------------------------------------------------------------ #
+    # DPO（偏好对比优化）
     def to_dpo_dataset(
         self,
         *,
@@ -397,9 +389,7 @@ class MultiturnDataset:
             full_ds, eval_ratio=eval_ratio, n_eval=n_eval, seed=self.seed
         )
 
-    # ------------------------------------------------------------------ #
-    # Inputs（输入集）                                                      #
-    # ------------------------------------------------------------------ #
+    # Inputs（输入集）
     def to_inputs_dataset(
         self,
         *,
@@ -432,9 +422,7 @@ class MultiturnDataset:
             full_ds, eval_ratio=eval_ratio, n_eval=n_eval, seed=self.seed
         )
 
-    # ------------------------------------------------------------------ #
-    # 其他工具方法（misc）                                                  #
-    # ------------------------------------------------------------------ #
+    # 其他工具方法（misc）
     def __len__(self):
         return len(self.data)
 

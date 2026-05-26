@@ -1,3 +1,18 @@
+"""
+collabllm.datasets.cleaner
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+数据清洗与质量筛选工具。
+
+该模块负责：
+
+1. 读取原始 JSON / JSONL 数据。
+2. 将原始数据解析为 `TeachingSession`。
+3. 执行格式校验、内容过滤与质量评分。
+4. 进行按主题与质量平衡的抽样。
+
+输出通常为清洗后的会话集合，以及对应的统计信息与丢弃样本记录。
+"""
+
 import argparse
 from collections import Counter
 import json
@@ -18,35 +33,15 @@ from collabllm.utils.clean import (
 logger = logging.getLogger(__name__)
 
 
-# =======================================================================
-# DataCleaner: 数据清洗工具，支持规则过滤 + 质量评分 + 多样性平衡抽样
-# =======================================================================
-# 核心特性：
-#   1. 格式检查：对话长度、角色、内容完整性
-#   2. 内容质量检查：防止泄题、防止讲课模式、强制提问（苏格拉底法）
-#   3. 质量评分：基于标注数据的跨学科、引导等级、认知层级等维度评分
-#   4. 多样性平衡抽样：
-#      - 按 topic_id 分组，保证所有学科都有代表性
-#      - 每个 topic 内按质量排序，取最优样本
-#      - 样本在各 topic 之间相对均衡分配
-#      - 如果数据不足，从全局高质量池中补齐
-# =======================================================================
-
-
 class DataCleaner:
     def __init__(self, input_path: str, output_path: str, top_n: Optional[int] = None):
         """
-        Initialize the DataCleaner with input and output paths.
-        Args:
-            input_path (str): Path to the input dataset.
-            output_path (str): Path to save the cleaned dataset.
-        """
-        """
         使用输入与输出路径初始化 DataCleaner。
 
-        参数：
-            input_path (str): 输入数据集路径。
-            output_path (str): 清洗后数据保存路径。
+        Args:
+            input_path: 输入数据集路径。
+            output_path: 清洗后数据保存路径。
+            top_n: 可选的保留样本上限。
         """
         self.input_path = input_path
         self.output_path = output_path
@@ -56,17 +51,10 @@ class DataCleaner:
         self.top_n = top_n
 
     def load_data(self) -> Generator:
-        """Yield parsed JSON objects from input path.
-
-        Behavior:
-        - If ``self.input_path`` is a file, it will be read directly.
-        - If it's a directory, files are discovered recursively (os.walk).
-        - Only files ending with ``.jsonl`` or ``.json`` are processed.
-        - Skips hidden files and empty lines.
-        - Malformed JSON lines are counted in ``self.stats['json_errors']`` and recorded in ``self.dropped_samples``.
+        """从输入路径读取并产出解析后的 JSON 对象。
 
         Yields:
-            dict: parsed JSON objects (one per line in jsonl/json files).
+            逐行解析后的 JSON 对象。
         """
         if not os.path.exists(self.input_path):
             logger.error("input_path does not exist: %s", self.input_path)
@@ -108,7 +96,7 @@ class DataCleaner:
             logger.exception("Failed to read %s: %s", path, e)
 
     def filter_format(self, session: TeachingSession) -> tuple[bool, str]:
-        """检查基础结构"""
+        """检查基础结构。"""
         if len(session.dialogue) < 3:
             return False, "too_short_turns"
 
@@ -183,19 +171,19 @@ class DataCleaner:
             role_lower = turn.role.lower()
             content = turn.content.strip()
 
-            # --- 针对老师的严格审查 ---
+        # 针对老师的严格审查
             if role_lower in ["教师", "teacher"]:
                 if len(content) < 4:
                     return False, "teacher_too_short"
 
-                # 讲课模式检测：如果老师说的话太长（超过 800 字），
+                # 讲课模式检测：如果老师说的话太长（超过 800 字）
                 if len(content) > 800:
                     return (
                         False,
                         "teacher_lecture_mode_too_long",
                     )
 
-                # 隐式泄题检测 (Regex)
+                # 隐式泄题检测（Regex）
                 for pattern in leaked_patterns:
                     if re.search(pattern, content):
                         # 特殊豁免：如果是最后一轮的总结，允许出现“综上所述”
@@ -204,17 +192,7 @@ class DataCleaner:
                             continue
                         return False, "leaked_answer_pattern"
 
-                # # 苏格拉底核心检测：必须包含问号！
-                # # 除非是最后一轮总结，否则老师必须提问（包含 ？ 或 ?）
-                # # 这是最狠的一招，能杀掉 80% 的伪苏格拉底数据
-                # is_last_turn = i == len(session.dialogue) - 1
-                # if not is_last_turn:
-                #     if not re.search(r"[？\?]", content):
-                #         # 有些老师用“请解释...”代替提问，稍微放宽一点
-                #         if not re.search(r"(请|试着|能否|可否|思考|分析)", content):
-                #             return False, "not_socratic_no_question"
-
-            # --- 针对学生的检查 (防止数据本身质量低) ---
+            # 针对学生的检查（防止数据本身质量低）
             elif role_lower in ["学生", "student"]:
                 # 如果学生说的话太长（超过 800 字）
                 if len(content) > 800:
@@ -412,19 +390,19 @@ class DataCleaner:
                 metrics = self.evaluate_session(session)
                 session.quality_score = metrics["total_score"]
 
-                # --- Hard Filter 1: Interdisciplinary Knowledge Transfer (IKT) > 0 ---
+                # 硬过滤 1：跨学科知识迁移（IKT）> 0
                 if metrics.get("ikt_score", 0) <= 0:
                     self.stats["low_ikt"] += 1
                     metrics_stats["low_ikt"] += 1
                     continue
 
-                # --- Hard Filter 2: Strategy Variety >= 0.5 ---
+                # 硬过滤 2：策略多样性 >= 0.5
                 if metrics.get("strategy_variety", 0) < 0.5:
                     self.stats["low_strategy_variety"] += 1
                     metrics_stats["low_variety"] += 1
                     continue
 
-                # Passed all hard filters
+                # 通过全部硬过滤
                 self.valid_sessions.append(session)
 
             except Exception as e:

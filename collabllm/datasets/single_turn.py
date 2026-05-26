@@ -1,133 +1,145 @@
+"""
+collabllm.datasets.single_turn
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+单轮对话数据的统一加载器与包装器。
+
+支持输入为单轮对话字典列表，并统一转换为 HuggingFace DatasetDict：
+
+1. 输入数据必须包含 `prompt` 和 `completion` 字段。
+2. 可选支持 `split` 字段，用于直接指定 train/eval 划分。
+3. 若没有 `split` 字段，则按 `eval_ratio` 随机拆分训练集和验证集。
+
+输出字段统一为：
+`single_turn_prompt`、`single_turn_completion`、`single_turn_metadata`
+"""
+
 from datasets import Dataset, DatasetDict
 from typing import List, Dict, Any
 import random
 
 
 class SingleTurnDataset:
-    """A dataset wrapper for single-turn chat data with HuggingFace integration."""
-    
+    """用于单轮对话数据的 Dataset 封装，兼容 HuggingFace DatasetDict。"""
+
     def __init__(self, data: List[Dict[str, Any]], eval_ratio: float = 0.1, seed: int = 42):
         """
-        Initializes the SingleTurnDataset with chat data.
+        初始化 SingleTurnDataset。
 
         Args:
-            data: A list of dictionaries, each representing a single chat turn.
-                  Each dictionary must contain 'prompt' and 'completion' keys,
-                  and may contain additional metadata fields.
-            eval_ratio: Proportion of data to use for evaluation split when 
-                       'split' field is not present in data (default: 0.1).
-            seed: Random seed for train/eval splitting (default: 42).
-        
+            data: 单轮对话数据列表。每条数据必须包含 'prompt' 和 'completion'，
+                  也可以包含其他元数据字段。
+            eval_ratio: 当数据中没有 'split' 字段时，用于划分验证集的比例。
+            seed: 随机划分训练/验证集时使用的随机种子。
+
         Raises:
-            ValueError: If data is empty or missing required fields.
+            ValueError: 当数据为空或缺少必需字段时抛出。
         """
         if not data:
             raise ValueError("Data cannot be empty")
-        
-        # Validate required fields
-        required_fields = {'prompt', 'completion'}
+
+        # 校验必需字段
+        required_fields = {"prompt", "completion"}
         self.fields = set(data[0].keys())
-        
+
         if not required_fields.issubset(self.fields):
             missing = required_fields - self.fields
             raise ValueError(f"Missing required fields: {missing}")
-        
-        # Validate all entries have consistent keys
+
+        # 校验所有条目的字段是否一致
         for i, entry in enumerate(data):
             if set(entry.keys()) != self.fields:
-                raise ValueError(f"Entry {i} has inconsistent keys. "
-                               f"Expected: {self.fields}, Got: {set(entry.keys())}")
-        
+                raise ValueError(
+                    f"Entry {i} has inconsistent keys. "
+                    f"Expected: {self.fields}, Got: {set(entry.keys())}"
+                )
+
         self.data = data
         self.eval_ratio = eval_ratio
         self.seed = seed
 
     def to_hf_dataset(self) -> DatasetDict:
         """
-        Converts the dataset to HuggingFace DatasetDict format.
-        
-        If 'split' field exists in data, uses those splits.
-        Otherwise, randomly splits data into train/eval based on eval_ratio.
-        
+        将数据转换为 HuggingFace 的 DatasetDict 格式。
+
+        如果数据中存在 'split' 字段，则直接按该字段划分；
+        否则按 eval_ratio 随机划分 train/eval。
+
         Returns:
-            DatasetDict with train and/or eval splits containing:
-            - single_turn_prompt: The input prompts
-            - single_turn_completion: The expected completions  
-            - metadata: Dictionary of additional fields
+            包含 train/eval 切分的 DatasetDict，每条样本包含：
+            - single_turn_prompt: 输入提示
+            - single_turn_completion: 目标回复
+            - single_turn_metadata: 其他元数据
         """
-        # Check if split information exists
-        if 'split' in self.fields:
-            splits = [entry['split'] for entry in self.data]
+        # 如果已有 split 字段，直接使用
+        if "split" in self.fields:
+            splits = [entry["split"] for entry in self.data]
             unique_splits = list(set(splits))
             split_indices = {
-                split: [i for i, x in enumerate(splits) if x == split] 
+                split: [i for i, x in enumerate(splits) if x == split]
                 for split in unique_splits
             }
         else:
-            # Create random train/eval split
-
+            # 否则随机生成 train/eval 划分
             random.seed(self.seed)
             eval_size = int(len(self.data) * self.eval_ratio)
             eval_indices = random.sample(range(len(self.data)), k=min(eval_size, len(self.data)))
             train_indices = list(set(range(len(self.data))) - set(eval_indices))
-            
+
             split_indices = {
-                'train': train_indices,
-                'eval': eval_indices
+                "train": train_indices,
+                "eval": eval_indices,
             }
-        
-        # Build metadata fields (exclude prompt, completion, and split)
-        metadata_fields = self.fields - {'prompt', 'completion', 'split'}
-        
+
+        # 构建元数据字段（排除 prompt、completion 和 split）
+        metadata_fields = self.fields - {"prompt", "completion", "split"}
+
         dataset_dict = {}
         for split, indices in split_indices.items():
-            if not indices:  # Skip empty splits
+            if not indices:  # 跳过空切分
                 continue
-                
+
             dataset_dict[split] = Dataset.from_dict({
-                "single_turn_prompt": [self.data[i]['prompt'] for i in indices],
-                "single_turn_completion": [self.data[i]['completion'] for i in indices],
+                "single_turn_prompt": [self.data[i]["prompt"] for i in indices],
+                "single_turn_completion": [self.data[i]["completion"] for i in indices],
                 "single_turn_metadata": [
                     {field: self.data[i][field] for field in metadata_fields}
                     for i in indices
                 ]
             })
-        
+
         return DatasetDict(dataset_dict)
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """
-        Retrieves a specific chat entry by index.
+        按索引获取一条数据。
 
         Args:
-            idx: The index of the chat entry to retrieve.
+            idx: 需要获取的数据索引。
 
         Returns:
-            The chat entry at the specified index.
-        
+            指定索引的数据项。
+
         Raises:
-            IndexError: If index is out of range.
+            IndexError: 当索引越界时抛出。
         """
         return self.data[idx]
 
     def __len__(self) -> int:
         """
-        Returns the number of chat entries in the dataset.
-
         Returns:
-            The number of chat entries in the dataset.
+            数据集样本数量。
         """
         return len(self.data)
-    
+
     def get_splits_info(self) -> Dict[str, int]:
         """
-        Returns information about data splits.
-        
+        返回数据切分信息。
+
         Returns:
-            Dictionary mapping split names to their sizes.
+            各切分名称及其样本数。
         """
-        if 'split' in self.fields:
-            splits = [entry['split'] for entry in self.data]
+        if "split" in self.fields:
+            splits = [entry["split"] for entry in self.data]
             split_counts = {}
             for split in set(splits):
                 split_counts[split] = splits.count(split)
@@ -135,7 +147,7 @@ class SingleTurnDataset:
         else:
             eval_size = int(len(self.data) * self.eval_ratio)
             return {
-                'train': len(self.data) - eval_size,
-                'eval': eval_size
+                "train": len(self.data) - eval_size,
+                "eval": eval_size,
             }
 

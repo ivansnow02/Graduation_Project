@@ -1,3 +1,11 @@
+"""
+collabllm.vanilla_synthetic
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+单轮合成数据生成工具。
+
+负责基于模拟器与单轮奖励函数，生成用于单轮训练的数据样本。
+"""
+
 import json
 import logging
 from typing import Any, Dict, List, Optional

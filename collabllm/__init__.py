@@ -18,7 +18,7 @@ from pathlib import Path
 def _local_strtobool(val: str) -> int:
     """Return 1 for truthy strings, 0 for falsy strings, else raise ValueError.
 
-    Mirrors distutils.util.strtobool / setuptools.util.strtobool behavior
+    模拟 distutils.util.strtobool / setuptools.util.strtobool 的行为
     sufficiently for our usage.
     """
     v = str(val).strip().lower()
@@ -29,9 +29,7 @@ def _local_strtobool(val: str) -> int:
     raise ValueError(f"invalid truth value {val!r}")
 
 
-# --------------------------------------------------------------------------- #
-# 公共包元数据                                                                 #
-# --------------------------------------------------------------------------- #
+# Package metadata
 __version__ = "0.1.0"  # update as needed
 __author__ = "Shirley Wu & the CollabLLM team"
 
@@ -42,9 +40,7 @@ __all__ = [
 ]
 
 
-# --------------------------------------------------------------------------- #
-# 工具：从环境变量解析布尔标志                                               #
-# --------------------------------------------------------------------------- #
+# 从环境变量解析布尔标志
 def _env_flag(name: str, default: str = "1") -> bool:
     """
     Convert an environment variable to bool.
@@ -59,9 +55,7 @@ def _env_flag(name: str, default: str = "1") -> bool:
         return bool(_local_strtobool(default))
 
 
-# --------------------------------------------------------------------------- #
-# 全局日志开关                                                                 #
-# --------------------------------------------------------------------------- #
+# 全局日志开关
 ENABLE_COLLABLLM_LOGGING: bool = _env_flag("ENABLE_COLLABLLM_LOGGING", "1")
 
 
@@ -87,9 +81,7 @@ else:
     _pkg_logger.addHandler(logging.NullHandler())
 
 
-# --------------------------------------------------------------------------- #
-# LiteLLM 相关设置                                                              #
-# --------------------------------------------------------------------------- #
+# LiteLLM 相关设置
 import litellm
 
 # 默认禁用 LiteLLM 的缓存（大多数场景不需要）
@@ -99,9 +91,7 @@ litellm.disable_cache()
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 _pkg_logger.info("已默认禁用 LiteLLM 缓存与日志。")
 
-# --------------------------------------------------------------------------- #
-# 每用户运行时目录                                                              #
-# --------------------------------------------------------------------------- #
+# 每用户运行时目录
 _DEFAULT_RUN_DIR = "run/collabllm/user_{uid}"
 
 

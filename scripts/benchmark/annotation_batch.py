@@ -5,24 +5,24 @@ import os
 import sys
 from pathlib import Path
 
-# Try to import build_prompt from annotation.py
+# 尝试从 annotation.py 导入辅助函数
 try:
     sys.path.append(str(Path(__file__).parent.parent.parent))
     from scripts.benchmark.annotation import build_prompt, extract_first_json_array
 except ImportError:
     print(
-        "Warning: Could not import helper functions from annotation.py. Please ensure you are running from project root."
+        "警告：无法从 annotation.py 导入辅助函数，请确认你是在项目根目录下运行。"
     )
     sys.exit(1)
 
 
 def encode_filename(name: str) -> str:
-    """Encodes a filename to a URL-safe base64 string."""
+    """将文件名编码为适合 URL 的 base64 字符串。"""
     return base64.urlsafe_b64encode(name.encode("utf-8")).decode("utf-8")
 
 
 def decode_filename(encoded: str) -> str:
-    """Decodes a URL-safe base64 string back to a filename."""
+    """将适合 URL 的 base64 字符串解码回文件名。"""
     try:
         return base64.urlsafe_b64decode(encoded.encode("utf-8")).decode("utf-8")
     except Exception:
@@ -38,8 +38,8 @@ def prepare_batch_file(
     max_size_mb: float = 6.0,
 ):
     """
-    Reads input JSON/JSONL (file or directory), generates prompts,
-    and writes JSONL files suitable for Batch API, splitting at max_size_mb.
+    读取输入 JSON/JSONL（文件或目录），生成 prompt，
+    并按 `max_size_mb` 分割写出适合 Batch API 的 JSONL 文件。
     """
     input_p = Path(input_path)
     if not input_p.exists():
@@ -104,7 +104,7 @@ def prepare_batch_file(
 
                     total_chars += len(prompt)
 
-                    # Custom ID: req-{file_id}-{d_idx}-{p_idx}
+                    # 自定义 ID：req-{file_id}-{d_idx}-{p_idx}
                     custom_id = f"req-{file_id}-{idx}-{pair_idx}"
 
                     body = {
@@ -131,7 +131,7 @@ def prepare_batch_file(
                     )
                     line_bytes = len(line_to_write.encode("utf-8"))
 
-                    # Check if we need to rotate
+                    # 检查是否需要切分输出文件
                     if (
                         current_file_size + line_bytes > max_bytes
                         and current_file_size > 0
@@ -165,7 +165,7 @@ def prepare_batch_file(
 
 def merge_results(input_path: str, batch_output_path: str, final_output_path: str):
     """
-    Merges batch API results back into the original dataset structure.
+    将 Batch API 的结果合并回原始数据结构。
     """
     input_p = Path(input_path)
     output_p = Path(final_output_path)
@@ -187,7 +187,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
             return
         output_p.mkdir(parents=True, exist_ok=True)
 
-    # 1. Parse Batch Results -> Map
+    # 1. 解析 Batch 结果到映射表
     print(f"Reading batch results from {batch_output_path}...")
     results_map = {}  # { filename: { (d_idx, p_idx): annotations } }
 
@@ -211,7 +211,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
                     custom_id = res.get("custom_id", "")
 
                     parts = custom_id.split("-")
-                    # Format: req-{file_id}-{d_idx}-{p_idx}
+                    # 格式：req-{file_id}-{d_idx}-{p_idx}
                     if len(parts) < 4 or parts[0] != "req":
                         continue
 
@@ -246,7 +246,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
         f"Processed total batch results: {success_count} success, {fail_count} failed."
     )
 
-    # 2. Iterate inputs and write outputs
+    # 2. 遍历输入并写出结果
     files = []
     if is_dir_mode:
         files = sorted(list(input_p.glob("*.jsonl")) + list(input_p.glob("*.json")))
@@ -256,7 +256,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
     for file_path in files:
         fname = file_path.name
 
-        # Determine output path
+        # 确定输出路径
         if is_dir_mode:
             target_out = output_p / fname
         else:

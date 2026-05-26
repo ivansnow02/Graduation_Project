@@ -1,3 +1,11 @@
+"""
+collabllm.modules.user_simulator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+用户模拟器封装。
+
+该模块负责构造用户侧提示词，并驱动模型生成模拟用户回复。
+"""
+
 from typing import List
 import logging
 import litellm
@@ -21,7 +29,7 @@ class UserSimulator(object):
     ):
         """初始化 `UserSimulator`。
 
-        参数说明：
+        Args:
             task_desc: 任务描述文本。
             single_turn_prompt: 单轮 prompt 文本。
             prompt_template: 可选的自定义模板字符串。

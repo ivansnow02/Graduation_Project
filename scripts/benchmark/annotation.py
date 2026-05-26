@@ -37,7 +37,7 @@ API_TIMEOUT = 300
 
 
 def call_lm_studio(prompt: str, model: str) -> str:
-    """调用 LM Studio API 生成回复"""
+    """调用 LM Studio API 生成回复。"""
     try:
         # print(f"DEBUG: Sending request to model {model}...")
         response = requests.post(
@@ -189,7 +189,7 @@ def load_existing_results(output_path):
 
 
 def process_entry(entry, idx, models):
-    """Process a single dialogue entry using multiple models in rotation or specific logic."""
+    """使用多个模型轮流处理单条对话记录。"""
     model = models[(idx - 1) % len(models)]
     turns = entry.get("dialogue", [])
     num_pairs = (len(turns)) // 2
@@ -227,7 +227,7 @@ def annotate_dialogue_file(input_path, output_path):
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     mode = "a" if processed_count > 0 else "w"
 
-    # Prepare tasks
+    # 准备任务
     tasks = []
     for idx, entry in enumerate(dialogues, start=1):
         if idx <= processed_count:
@@ -254,7 +254,7 @@ def annotate_dialogue_file(input_path, output_path):
                 for t in tasks
             ]
 
-            # Iterate over futures in order to maintain order in output file
+            # 依次等待 future，保证输出顺序稳定
             for future in futures:
                 try:
                     result_entry = future.result()

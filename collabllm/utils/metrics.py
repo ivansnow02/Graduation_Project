@@ -35,11 +35,14 @@ WEIGHTS = {
 
 def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     """
-    Calculate comprehensive quality metrics for a teaching session.
+    计算一次教学会话的综合质量指标。
 
-    Returns a dictionary containing:
-      - Individual metric scores (raw and normalized)
-      - 'total_score': The final weighted quality score (0-1)
+    Returns:
+        包含各项指标分数以及最终总分的字典。
+
+    其中包括：
+        - 各单项指标分数（原始值与归一化值）
+        - total_score：最终加权质量分数（0-1）
     """
     annotations = session.annotations
     if not annotations:
@@ -54,7 +57,7 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     # 这里我们直接使用教师标注的数量作为近似值。
     teacher_ann_count = len(teacher_anns)
 
-    # --- 1. 策略密度与多样性 ---
+    # 1. 策略密度与多样性
     # 密度：包含至少一种策略的教师回合占比。
     # 多样性：涵盖的标准策略数量占比（最多 8 种）。
 
@@ -87,13 +90,13 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     strategy_variety = len(unique_strategies_found) / TOTAL_POSSIBLE_STRATEGIES
     strategy_variety = min(strategy_variety, 1.0)
 
-    # --- 2. 跨学科知识迁移（IKT） ---
-    # objective_eval: 统计 discipline_transfer 字段为 "是" 的回合数
+    # 2. 跨学科知识迁移（IKT）
+    # objective_eval：统计 discipline_transfer 字段为 "是" 的回合数
     # 得分 = count / 教师回合总数
 
     transfer_count = 0
     for ann in teacher_anns:
-        # Check standard positive values
+        # 检查标准正值
         val = str(ann.discipline_transfer).strip().lower()
         if val in ["是", "yes", "true", "1"]:
             transfer_count += 1
@@ -101,7 +104,7 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     ikt_score = (transfer_count / teacher_ann_count) if teacher_ann_count > 0 else 0.0
     ikt_score = min(ikt_score, 1.0)  # 上限限定为 1.0
 
-    # --- 3. 结构完整性（Structure Completeness） ---
+    # 3. 结构完整性（Structure Completeness）
     # objective_eval 使用的四个桶：{"引出概念", "引导推理", "引发迁移", "总结提升"}
     # 我们将标准化后的意图映射到这些类别，并另外检测迁移（Transfer）。
 
@@ -122,8 +125,8 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
         elif canonical == "summarize_enhance":
             detected_structure_buckets.add("总结提升")
         elif canonical == "check_understanding":
-            # Note: objective_eval doesn't strictly require Check Understanding in its set of 4.
-            # But it's a valid intent. We ignore it for the *Required Set* calculation if strictly following objective_eval.
+            # 说明：objective_eval 在其 4 项集合中不严格要求 Check Understanding。
+            # 但它是有效意图；如果严格按 objective_eval 的要求集合计算，则忽略它。
             pass
 
         # 特殊检测：如果原始意图文本中包含迁移相关词，则标记为 "引发迁移"
@@ -136,8 +139,8 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     covered_count = len(detected_structure_buckets.intersection(REQUIRED_INTENTS))
     structure_completeness = covered_count / len(REQUIRED_INTENTS)
 
-    # --- 4. L3 指导率 ---
-    # objective_eval: teacher_guidance_level == "L3"
+    # 4. L3 指导率
+    # objective_eval：teacher_guidance_level == "L3"
 
     l3_count = 0
     for ann in teacher_anns:
@@ -146,8 +149,8 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
 
     l3_guidance_rate = (l3_count / teacher_ann_count) if teacher_ann_count > 0 else 0.0
 
-    # --- 5. Bloom 进阶（Bloom Progression） ---
-    # objective_eval: 计算 (max - min) / (6-1)
+    # 5. Bloom 进阶（Bloom Progression）
+    # objective_eval：计算 (max - min) / (6-1)
 
     student_bloom_levels = []
     for ann in student_anns:
@@ -155,7 +158,7 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
         # 注意：clean.py 的函数接收文本，返回整数（0-6）
         # ann.cognitive_level 通常为字符串文本
         level = normalize_cognitive_level(ann.cognitive_level)
-        if level > 0:  # valid level
+        if level > 0:  # 有效等级
             student_bloom_levels.append(level)
 
     if student_bloom_levels:
@@ -165,11 +168,10 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
         bloom_progression = 0.0
     bloom_progression = min(bloom_progression, 1.0)
 
-    # --- 6. 认知纠正率（Cognitive Correction Rate, 3C） ---
-    # objective_eval: successful_correction_count / total_error_count
+    # 6. 认知纠正率（Cognitive Correction Rate, 3C）
+    # objective_eval：successful_correction_count / total_error_count
     # 错误判定关键词示例："错误回答"
     # 修正成功的判定：从错误状态 -> 下一状态为 ["高阶思考", "清晰理解"]
-
     # 需要按时间顺序遍历学生状态序列。
     # 通常 TeachingSession.annotations 会按出现顺序排列。
 
@@ -190,10 +192,10 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
     def is_clear(s):
         return any(k in s for k in ["清晰", "Clear", "高阶", "Higher-order"])
 
-    # First pass: count errors
+    # 第一遍：统计错误
     total_error_count = sum(1 for s in student_states if is_error(s))
 
-    # Second pass: count corrections
+    # 第二遍：统计修正
     for i in range(len(student_states) - 1):
         current_s = student_states[i]
         next_s = student_states[i + 1]
@@ -208,7 +210,7 @@ def calculate_session_metrics(session: TeachingSession) -> Dict[str, Any]:
 
     cognitive_correction_rate = min(cognitive_correction_rate, 1.0)
 
-    # --- 计算总分 ---
+    # 计算总分
     total_score = (
         WEIGHTS["strategy_density"] * strategy_density
         + WEIGHTS["strategy_variety"] * strategy_variety

@@ -1,3 +1,12 @@
+"""
+collabllm.metric
+~~~~~~~~~~~~~~~~
+度量与评分接口定义。
+
+该模块提供统一的 metric 基类与若干面向单轮/多轮对话的评分接口，
+供训练、评估和奖励计算流程复用。
+"""
+
 import abc
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -10,9 +19,7 @@ from collabllm.utils.extract_json_reliable import extract_json
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------------------------- #
-# 1. 抽象接口                                                                  #
-# --------------------------------------------------------------------------- #
+# 抽象接口
 class BaseMetric(abc.ABC):
     """每个度量（metric）必须实现 `score` 方法，并声明其返回的键（keys）。"""
 
@@ -28,9 +35,7 @@ class BaseMetric(abc.ABC):
         """Compute the metric(s) for a prompt–completion pair."""
 
 
-# --------------------------------------------------------------------------- #
-# 2. 通用驱动                                                                  #
-# --------------------------------------------------------------------------- #
+# 通用驱动
 class SingleTurnOrChatMetric:
     """
     一个包装类：可选地将多轮对话日志提取为最终的输出（final completion），
@@ -45,7 +50,7 @@ class SingleTurnOrChatMetric:
     • 随后使用 `<metric_name>` 计算并返回数值评分。
     """
 
-    # 注册表，用户可以通过一行装饰器将自定义 metric 注册进来
+    # 注册表：可通过装饰器注册自定义 metric
     _METRIC_REGISTRY: Dict[str, type[BaseMetric]] = {}
 
     def __init__(self, signature: str, **llm_kwargs: Any):
@@ -67,7 +72,7 @@ class SingleTurnOrChatMetric:
         except Exception as e:
             self.metric: BaseMetric = metric_cls()
 
-    # -------------------------- public API --------------------------------- #
+    # 公共 API
     def __call__(  # noqa: D401
         self,
         messages: List[Dict[str, str]],
@@ -85,7 +90,7 @@ class SingleTurnOrChatMetric:
             single_turn_prompt, single_turn_completion, completion, messages, metadata
         )
 
-    # -------------------------- 辅助方法 ------------------------------------ #
+    # 辅助方法
     @staticmethod
     def _parse_signature(sig: str) -> Tuple[Optional[str], str]:
         # 解析签名：如果包含 '->' 则分割为 (extract_type, metric_name)，否则只有 metric_name
@@ -124,7 +129,7 @@ class SingleTurnOrChatMetric:
                 else response  # Already parsed
             )
             logger.info("Extractor 输出: %s", payload)
-            # 验证提取结果包含预期字段 'thought' 和 'final_completion'
+            # 验证提取结果包含预期字段 thought 和 final_completion
             if not (
                 isinstance(payload, dict)
                 and {"thought", "final_completion"} <= payload.keys()
@@ -136,7 +141,7 @@ class SingleTurnOrChatMetric:
             logger.error("JSON 提取失败: %s", e)
             raise RuntimeError("无法解析 extractor 的输出；详细信息请查看日志。") from e
 
-    # ---------------------- registration decorator ------------------------- #
+    # 注册装饰器
     @classmethod
     def register_metric(cls, name: str):
         """装饰器：将 `metric_cls` 注册到全局注册表中，供签名调用使用。"""
@@ -151,12 +156,6 @@ class SingleTurnOrChatMetric:
 
         return _decorator
 
-        return _decorator
-
-
-# --------------------------------------------------------------------------- #
-# 3. 标准度量（Metrics）注册                                                  #
-# --------------------------------------------------------------------------- #
 # 导入并注册标准的 metric 实现
 try:
     from collabllm.metrics.teaching_quality import TeachingQualityMetric

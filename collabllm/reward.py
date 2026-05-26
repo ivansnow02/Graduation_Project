@@ -1,9 +1,9 @@
 """
-多轮奖励计算（一次调用 ChatSessionSimulator 即可返回多条会话）。
+collabllm.reward
+~~~~~~~~~~~~~~~~
+多轮奖励计算工具。
 
-假设：
-• ChatSessionSimulator.run_chat_simulation 支持 `num_samples`，一次返回多条会话（内部并行/批处理）。
-• SingleTurnOrChatMetric 接口保持不变。
+该模块基于 `ChatSessionSimulator` 和度量接口，为多轮对话生成奖励分数。
 """
 
 from __future__ import annotations
@@ -21,9 +21,7 @@ from collabllm.utils.template import strip_system_prompt
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------------------------- #
-# Metric 辅助函数                                                               #
-# --------------------------------------------------------------------------- #
+# Metric helper
 def _score_one_metric(
     metric_name: str,
     messages: List[Dict[str, str]],
@@ -44,9 +42,7 @@ def _score_one_metric(
     return cast(float, res)
 
 
-# --------------------------------------------------------------------------- #
-# 辅助：美观的统计汇总表                                                         #
-# --------------------------------------------------------------------------- #
+# 统计汇总表
 def _log_reward_summary(reward_dict: Dict[str, List[float]]) -> None:
     """Compute mean / std for each metric list in `reward_dict` and log."""
     rows = []
@@ -72,9 +68,7 @@ def _log_reward_summary(reward_dict: Dict[str, List[float]]) -> None:
     logger.info("Reward statistics:%s", table)
 
 
-# --------------------------------------------------------------------------- #
-# 公共 API                                                                     #
-# --------------------------------------------------------------------------- #
+# 公共 API
 def multiturn_aware_reward(
     *,
     task_desc: str,
@@ -96,9 +90,7 @@ def multiturn_aware_reward(
     if len(metric_weights) != len(metric_names):
         raise ValueError("`metric_weights` length must equal `metric_names` length")
 
-    # ------------------------------------------------------------------ #
-    # 1 · 一次性生成所有会话                                                 #
-    # ------------------------------------------------------------------ #
+    # 1. 一次性生成所有会话
     sessions = ChatSessionSimulator().run_chat_simulation(
         task_desc=task_desc,
         single_turn_prompt=single_turn_prompt,
@@ -108,15 +100,11 @@ def multiturn_aware_reward(
     # 去除可能存在的 system 消息
     sessions = [strip_system_prompt(session) for session in sessions]
 
-    # ------------------------------------------------------------------ #
-    # 2 · 准备结果容器                                                      #
-    # ------------------------------------------------------------------ #
+    # 2. 准备结果容器
     reward_dict: Dict[str, List[float]] = {m: [] for m in metric_names}
     reward_dict["MR"] = []
 
-    # ------------------------------------------------------------------ #
-    # 3 · 指标评估（对每个会话 × 指标进行完全并行计算）                      #
-    # ------------------------------------------------------------------ #
+    # 3. 指标评估（对每个会话 × 指标进行并行计算）
     n_conv = len(sessions)
     # 初始化存储结构
     for m in metric_names:
@@ -136,7 +124,7 @@ def multiturn_aware_reward(
                     single_turn_completion,
                     metadata,
                 )
-                # 保存上下文：对应哪个会话 / 哪个指标 / 权重索引
+                # 保存上下文：对应会话、指标和权重索引
                 fut_to_ctx[fut] = (conv_idx, i, metric_name)
 
         for fut in as_completed(fut_to_ctx):
@@ -144,9 +132,7 @@ def multiturn_aware_reward(
             score = fut.result()
             reward_dict[metric_name][conv_idx] = score
 
-    # ------------------------------------------------------------------ #
-    # 4 · 聚合 → 计算 Multiturn-aware Reward (MR)
-    # ------------------------------------------------------------------ #
+    # 4. 聚合并计算 Multiturn-aware Reward (MR)
     for conv_idx in range(n_conv):
         reward_dict["MR"][conv_idx] = sum(
             reward_dict[m][conv_idx] * metric_weights[i]

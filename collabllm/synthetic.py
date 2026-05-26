@@ -1,3 +1,11 @@
+"""
+collabllm.synthetic
+~~~~~~~~~~~~~~~~~~~
+多轮合成数据生成工具。
+
+负责基于模拟器、奖励函数与模板，将原始任务转换为多轮对话训练数据。
+"""
+
 import json
 import numpy as np
 from typing import Any, Dict, List, Optional
@@ -35,22 +43,22 @@ def generate_multiturn_dataset(
     max_workers: int = 8,
     max_metric_workers: int = 8,
 ) -> Dict[str, Any]:
-        """生成嵌套格式的合成对话数据，结构如下：
-        {
-            "single_turn_prompt": ...,
-            "single_turn_completion": ...,
-            "single_turn_metadata": ...,
-            "turns": [
-                {
-                    "prompt": [ ... 到用户轮的消息列表 ... ],
-                    "responses": [
-                        {"completion": ..., "score": ...}, ...
-                    ]
-                },
-                ...
-            ]
-        }
-        """
+    """生成嵌套格式的合成对话数据，结构如下：
+    {
+        "single_turn_prompt": ...,
+        "single_turn_completion": ...,
+        "single_turn_metadata": ...,
+        "turns": [
+            {
+                "prompt": [ ... 到用户轮的消息列表 ... ],
+                "responses": [
+                    {"completion": ..., "score": ...}, ...
+                ]
+            },
+            ...
+        ]
+    }
+    """
     reward_generation_kwargs = reward_generation_kwargs or {}
     metric_weights = metric_weights or [1.0] * len(metric_names)
 

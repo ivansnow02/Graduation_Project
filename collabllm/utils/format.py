@@ -1,3 +1,11 @@
+"""
+collabllm.utils.format
+~~~~~~~~~~~~~~~~~~~~~~
+数据格式判断工具。
+
+该模块提供若干轻量辅助函数，用于判断样本是否属于对话格式等。
+"""
+
 from typing import Any
 
 
@@ -5,15 +13,15 @@ def is_conversational(example: dict[str, Any]) -> bool:
     r"""
     判断示例是否为对话（conversational）格式。
 
-    参数:
+    Args:
         example (`dict[str, Any]`):
             数据集中的单条条目。不同数据集可能使用不同的键名。
 
-    返回:
+    Returns:
         `bool`:
             如果数据为对话格式则返回 `True`，否则返回 `False`。
 
-    示例:
+    Examples:
 
     ```python
     >>> example = {"prompt": [{"role": "user", "content": "What color is the sky?"}]}

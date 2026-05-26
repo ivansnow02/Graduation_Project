@@ -12,7 +12,7 @@ from collabllm.utils.extract_json_reliable import extract_json
 
 logger = logging.getLogger(__name__)
 
-# --- 核心修改 1：在 Prompt 中注入"防复读"和"奖励脚手架"的铁律 ---
+# Prompt 规则
 ANNOTATION_HEADER = """
 你是一位严苛且专业的教育认知标注专家。请根据下面一段完整的教学对话，从第一轮开始逐轮提取以下9项教学信息，并输出为结构化 JSON 格式（列表形式）。
 请不要跳过任何一轮。你需要结合全局上下文来准确判断教师的引导深度。
@@ -24,7 +24,7 @@ ANNOTATION_SPEC = """
 - utterance：原始发言文本，**不能进行任何修改**
 - teacher_intent：教师发言中体现的教学目的（如"引出概念"、"引导推理"等），学生轮为空。
 - teaching_strategy：教师采用的策略。
-  ⚠️ 裁判铁律：如果教师仅仅是把学生的话改成问号复读一遍，没有任何新信息或引导方向，请标注为"无效复读"！
+  裁判铁律：如果教师仅仅是把学生的话改成问号复读一遍，没有任何新信息或引导方向，请标注为"无效复读"！
 - discipline：该轮涉及的学科。
 - discipline_transfer：若当前轮相较上轮出现新的学科，引导学科间联系，请填"是"，否则填"否"。
 - student_cognition_state：仅学生轮填写。
@@ -66,12 +66,7 @@ ANNOTATION_OUTPUT_REQ = """
 
 
 class TeachingQualityMetric(BaseMetric):
-    """
-    满血版 TeachingQualityMetric：
-    - 废除 Pair 切片，直接进行全局一次性标注
-    - 缓存 Key 使用 MD5(完整对话)，杜绝张冠李戴
-    - Prompt 注入防复读铁律，从源头掐断 Reward Hacking
-    """
+    """教学质量度量。"""
 
     def __init__(self, **llm_kwargs):
         self.llm_kwargs = llm_kwargs
@@ -80,7 +75,7 @@ class TeachingQualityMetric(BaseMetric):
         if "max_tokens" not in self.llm_kwargs:
             self.llm_kwargs["max_tokens"] = 4096
 
-    # 全局历史上下文级别的安全缓存
+    # 全局缓存
     _CACHE: Dict[str, List[Annotation]] = {}
 
     def score(
@@ -97,20 +92,20 @@ class TeachingQualityMetric(BaseMetric):
             )
             return 0.0
 
-        # 清洗掉 system prompt，只保留对话
+        # 只保留对话消息
         filtered_msgs = [
             m
             for m in messages
             if m["role"].lower() in ("user", "assistant", "student", "teacher")
         ]
 
-        # --- 核心修改 2：直接进行全局标注，不再切片 ---
+        # 直接进行全局标注
         annotations = self._annotate_full_dialogue(filtered_msgs)
 
         if not annotations:
             return 0.0
 
-        # --- 核心修改 3：更稳健的倒序查找，防止 list.index 报错 ---
+        # 倒序查找最后一个教师轮次
         last_teacher_idx = -1
         for i in range(len(annotations) - 1, -1, -1):
             if (
@@ -137,17 +132,17 @@ class TeachingQualityMetric(BaseMetric):
     ) -> List[Annotation]:
         """将完整的对话历史发给大模型进行一次性标注"""
 
-        # 1. 生成基于完整上下文的唯一缓存哈希值 (使用 MD5 防止 Key 过长)
+        # 生成基于完整上下文的唯一缓存哈希值 (使用 MD5 防止 Key 过长)
         key_content = "||".join(
             [f"{msg.get('role', '')}:{msg.get('content', '')}" for msg in messages]
         )
         cache_key = hashlib.md5(key_content.encode("utf-8")).hexdigest()
 
-        # 2. 命中缓存直接返回
+        # 命中缓存直接返回
         if cache_key in self._CACHE:
             return self._CACHE[cache_key]
 
-        # 3. 未命中，拼接全局 Prompt
+        # 未命中，拼接全局 Prompt
         dialogue_text = "##【对话内容】：\n"
         for msg in messages:
             role = "教师" if msg["role"].lower() in ("assistant", "teacher") else "学生"
@@ -180,6 +175,3 @@ class TeachingQualityMetric(BaseMetric):
         except Exception as e:
             logger.error(f"Error annotating dialogue: {e}")
             return []
-
-
-# Register directly if needed, but the main registry is in metric.py

@@ -13,10 +13,8 @@ import litellm
 from litellm import completion
 from litellm.exceptions import RateLimitError, APIConnectionError
 
-# === 新增：引入进度条库 ===
 from tqdm import tqdm
 
-# ===== 0. 全局配置与日志优化 =====
 dotenv.load_dotenv()
 
 # 禁用 Litellm 的自动日志回调，解决 Pydantic 序列化警告刷屏问题
@@ -26,12 +24,11 @@ litellm.callbacks = []
 
 import warnings
 litellm._turn_on_debug()
-# 忽略 Pydantic 序列化警告 (LiteLLM 返回对象字段不匹配问题)
+# 忽略 Pydantic 序列化警告
 warnings.filterwarnings("ignore", message=".*Pydantic serializer warnings.*")
 
 # 配置日志
-# 注意：为了防止日志打断进度条，我们将 StreamHandler (控制台输出) 移除，
-# 只保留 FileHandler (文件输出)。控制台进度由 tqdm 独占。
+# 为了防止日志打断进度条，这里只保留文件输出。
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -46,11 +43,9 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR", "outputs").strip()
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 
 
-# ===== 1. 核心 LLM 调用函数 (修改版) =====
-
 
 def get_clean_base_url(url_env_key):
-    """清洗 URL，确保格式正确"""
+    """清洗 URL，确保格式正确。"""
     url = os.getenv(url_env_key, "").strip()
     if not url:
         return None
@@ -72,7 +67,7 @@ STUDENT_API_BASE = get_clean_base_url("STUDENT_OPENAI_BASE_URL")
 
 def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
     """
-    统一调用函数
+    统一调用函数。
     """
     # URL 修正
     if api_base and not api_base.endswith("/v1"):
@@ -89,10 +84,10 @@ def call_llm(messages, model, api_base=None, api_key=None, temperature=0.7):
             api_key=api_key,
             custom_llm_provider="openai",  # 强制走 OpenAI 协议
             temperature=temperature,
-            max_tokens=2048,  # 适度减小，确保 input + output 不超过 server 限制 (约 5000)
+            max_tokens=2048,  # 适度减小，确保 input + output 不超过 server 限制
             drop_params=True,
             num_retries=3,
-            # === 关键修改：尝试通过参数禁用思考 ===
+            # 通过参数禁用思考
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
 
@@ -126,7 +121,7 @@ def build_messages_from_history(history, speaker):
     return messages
 
 
-# ===== 2. 业务逻辑 (Prompt) =====
+# 2. 业务逻辑（Prompt）
 
 
 def generate_initial_student_question(topic_text):
@@ -154,11 +149,11 @@ def generate_teacher_response(history):
 目标：通过逐轮递进的问题，引导学生独立思考。
 
 规范：
-1. 每一轮只能提出**一个**简洁的问题。
+1. 每一轮只能提出一个简洁的问题。
 2. 基于学生的回答提炼关键点，推进思考。
 3. 鼓励跨学科思考（生物、地理、物理、历史等）。
 4. 不要直接给答案，除非学生完全卡住需要提供脚手架。
-5. 当判断教学目标达成时，请输出一句简短总结，并**严格以字符串 [结束] 结尾**。
+5. 当判断教学目标达成时，请输出一句简短总结，并严格以字符串 [结束] 结尾。
 """
     messages = [{"role": "system", "content": system_prompt.strip()}]
     messages.extend(build_messages_from_history(history, speaker="teacher"))
@@ -296,12 +291,12 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     }
 
 
-# ===== 3. 多进程与文件写入 =====
+# 3. 多进程与文件写入
 
 
 def worker_process_topic(args):
     """
-    工作进程：处理单个 Topic，生成多个对话
+    工作进程：处理单个 Topic，生成多个对话。
     """
     topic_entry, topic_idx, base_output_dir = args
     topic_text = topic_entry.get("topic", "")
@@ -326,7 +321,7 @@ def worker_process_topic(args):
                     dialogue_data["topic_text_preview"] = topic_text[:50]
                     dialogue_data["repeat_id"] = f"R{r_idx + 1}"
 
-                    # === 实时写入 JSONL ===
+                    # 实时写入 JSONL
                     with open(output_file, "a", encoding="utf-8") as f:
                         f.write(json.dumps(dialogue_data, ensure_ascii=False) + "\n")
 
@@ -360,7 +355,7 @@ if __name__ == "__main__":
     # 准备参数列表
     args_list = [(t, i, OUTPUT_DIR) for i, t in enumerate(topics)]
 
-    # === 添加 TQDM 进度条 ===
+    # 添加 TQDM 进度条
     with multiprocessing.Pool(processes=max_workers) as pool:
         # 使用 tqdm 包裹迭代器，设置 total 让它知道总共有多少个任务
         # unit='topic' 显示单位，desc 显示描述

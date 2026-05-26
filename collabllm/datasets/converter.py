@@ -18,9 +18,7 @@ from collabllm.datasets.types import TeachingSession, DialogueTurn, Annotation
 logger = logging.getLogger(__name__)
 
 
-# =======================================================================
 # 工具函数
-# =======================================================================
 
 
 def normalize_role(role: str) -> str:
@@ -28,10 +26,10 @@ def normalize_role(role: str) -> str:
     将角色标准化为 "user" 或 "assistant"。
 
     Args:
-        role: 原始角色字符串 ("学生", "student", "教师", "teacher" 等)
+        role: 原始角色字符串（如 "学生"、"student"、"教师"、"teacher"）。
 
     Returns:
-        标准化后的角色 ("user" 或 "assistant")
+        标准化后的角色（"user" 或 "assistant"）。
     """
     role_lower = role.lower()
     if role_lower in {"学生", "student", "user"}:
@@ -48,11 +46,11 @@ def get_content_hash(messages: List[Dict[str, str]], length: int = 8) -> str:
     计算消息列表的 MD5 哈希。
 
     Args:
-        messages: 消息列表 (List of {role, content})
-        length: 哈希截取长度 (默认 8)
+        messages: 消息列表，每项包含 role 和 content。
+        length: 哈希截取长度，默认 8。
 
     Returns:
-        MD5 哈希字符串
+        MD5 哈希字符串。
     """
     import json
 
@@ -60,9 +58,7 @@ def get_content_hash(messages: List[Dict[str, str]], length: int = 8) -> str:
     return hashlib.md5(serialized.encode("utf-8")).hexdigest()[:length]
 
 
-# =======================================================================
 # 核心转换函数
-# =======================================================================
 
 
 def convert_session_to_nested(
@@ -92,12 +88,12 @@ def convert_session_to_nested(
     }
 
     Args:
-        session: TeachingSession 对象
-        use_quality_score: 是否使用 session 的 quality_score 作为 responses 的分数
-        extra_metadata: 额外的元数据字典，会与 session 元数据合并
+        session: TeachingSession 对象。
+        use_quality_score: 是否使用 session 的 quality_score 作为 responses 的分数。
+        extra_metadata: 额外的元数据字典，会与 session 元数据合并。
 
     Returns:
-        CollabLLM 嵌套格式的字典
+        CollabLLM 嵌套格式的字典。
     """
     if not session.dialogue:
         logger.warning(f"Session {session.student_id} has empty dialogue, skipping")
@@ -218,12 +214,12 @@ def convert_session_to_flat(
     }
 
     Args:
-        session: TeachingSession 对象
-        use_quality_score: 是否使用 quality_score
-        extra_metadata: 额外元数据
+        session: TeachingSession 对象。
+        use_quality_score: 是否使用 quality_score。
+        extra_metadata: 额外元数据。
 
     Returns:
-        扁平格式的字典列表
+        扁平格式的字典列表。
     """
     if not session.dialogue:
         return []
@@ -304,9 +300,7 @@ def convert_session_to_flat(
     return flat_data
 
 
-# =======================================================================
 # 批量转换函数
-# =======================================================================
 
 
 def convert_sessions_to_nested(
@@ -318,12 +312,12 @@ def convert_sessions_to_nested(
     批量转换多个 TeachingSession 为嵌套格式。
 
     Args:
-        sessions: TeachingSession 列表
-        use_quality_score: 是否使用质量分数
-        filter_empty: 是否过滤转换失败的 session
+        sessions: TeachingSession 列表。
+        use_quality_score: 是否使用质量分数。
+        filter_empty: 是否过滤转换失败的 session。
 
     Returns:
-        转换后的嵌套格式字典列表
+        转换后的嵌套格式字典列表。
     """
     converted = []
     failed = 0
@@ -356,11 +350,11 @@ def convert_sessions_to_flat(
     批量转换多个 TeachingSession 为扁平格式。
 
     Args:
-        sessions: TeachingSession 列表
-        use_quality_score: 是否使用质量分数
+        sessions: TeachingSession 列表。
+        use_quality_score: 是否使用质量分数。
 
     Returns:
-        转换后的扁平格式字典列表
+        转换后的扁平格式字典列表。
     """
     converted = []
     failed = 0
@@ -382,9 +376,7 @@ def convert_sessions_to_flat(
     return converted
 
 
-# =======================================================================
 # 带聚合的转换（用于合并多个回复）
-# =======================================================================
 
 
 def convert_sessions_to_nested_with_aggregation(
@@ -397,11 +389,11 @@ def convert_sessions_to_nested_with_aggregation(
     这样可以为同一轮对话保留多个不同的回复（responses 列表中有多条）。
 
     Args:
-        sessions: TeachingSession 列表
-        use_quality_score: 是否使用质量分数
+        sessions: TeachingSession 列表。
+        use_quality_score: 是否使用质量分数。
 
     Returns:
-        聚合后的嵌套格式字典列表
+        聚合后的嵌套格式字典列表。
     """
     # 首先转换所有 session 为扁平格式
     flat_data = convert_sessions_to_flat(

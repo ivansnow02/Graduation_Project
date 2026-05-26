@@ -1,3 +1,11 @@
+"""
+collabllm.modules.llm_collaborator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+LLM 协作端封装。
+
+该模块负责调用模型生成协作回复，并对返回结果进行解析与重试。
+"""
+
 from typing import List
 import logging
 import litellm
@@ -15,7 +23,7 @@ class LLMCollaborator(object):
     def __init__(self, method="none", num_retries=10, **llm_kwargs):
         """初始化 `LLMCollaborator`。
 
-        参数：
+        Args:
             method: 提示方法，必须在 `registered_prompts` 中注册。
             num_retries: 请求失败时的重试次数。
             llm_kwargs: 传递给 LLM 的额外参数。
@@ -36,10 +44,10 @@ class LLMCollaborator(object):
     def __call__(self, messages: List[dict], **kwargs):
         """模型的调用接口（前向流程）。
 
-        参数:
+        Args:
             messages (List[dict]): 消息列表，最后一条应为用户消息。
 
-        返回:
+        Returns:
             str: 模型生成的回复文本（已 strip）。
         """
         assert messages[-1]["role"] == "user"
