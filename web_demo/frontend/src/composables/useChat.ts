@@ -66,7 +66,7 @@ export interface ModelProfile extends ModelConfig {
   label: string;
 }
 
-const STORAGE_KEY_SESSIONS = "teaching_arena_sessions_v3"; // 更新的存储键，避免冲突
+const STORAGE_KEY_SESSIONS = "teaching_arena_sessions_v3"; 
 const STORAGE_KEY_CONFIG = "teaching_arena_config_v2";
 const DEFAULT_PROMPT = presetPrompts.find((p) => p.id === "socratic_base")!;
 
