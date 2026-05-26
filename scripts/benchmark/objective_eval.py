@@ -148,7 +148,7 @@ def calculate_metrics(dialogue: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def process_file(file_path: str, output_dir: str) -> List[Dict[str, Any]]:
-    print(f"---Start Processing Files: {file_path} ---")
+    print(f"开始处理文件：{file_path}")
     results_for_file = []
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -163,12 +163,12 @@ def process_file(file_path: str, output_dir: str) -> List[Dict[str, Any]]:
                         results_for_file.append(results)
                 except json.JSONDecodeError:
                     print(
-                        f"Warning: The JSON format of line {i} is invalid, skipped: {line}"
+                        f"警告：第 {i} 行 JSON 格式无效，已跳过：{line}"
                     )
     except FileNotFoundError:
-        print(f"Error: File Not Found! '{file_path}'")
+        print(f"错误：未找到文件 '{file_path}'")
     except Exception as e:
-        print(f"An unknown error occurred while processing the file: {e}")
+        print(f"处理文件时发生未知错误：{e}")
     if results_for_file:
         fname = os.path.basename(file_path)
         base_name, _ = os.path.splitext(fname)
@@ -176,20 +176,20 @@ def process_file(file_path: str, output_dir: str) -> List[Dict[str, Any]]:
         with open(output_path, "w", encoding="utf-8") as out_f:
             json.dump(results_for_file, out_f, indent=2, ensure_ascii=False)
         print(
-            f"---Processing completed. Single file results saved to: {output_path} ---"
+            f"处理完成，单文件结果已保存到：{output_path}"
         )
     else:
         print(
-            "No valid conversation data was found in the file, so no single-file result was generated."
+            "文件中未找到有效的对话数据，因此未生成单文件结果。"
         )
     return results_for_file
 
 
 def generate_summary_report(all_metrics: List[Dict], summary_path: str):
     if not all_metrics:
-        print("No metric data was collected to generate a summary report.")
+        print("未收集到指标数据，无法生成汇总报告。")
         return
-    print("---Generating Summary Report...---")
+    print("正在生成汇总报告...")
     sum_of_scores = defaultdict(float)
     sum_of_raw_values = defaultdict(float)
     total_dialogues = len(all_metrics)
@@ -217,32 +217,32 @@ def generate_summary_report(all_metrics: List[Dict], summary_path: str):
     try:
         with open(summary_path, "w", encoding="utf-8") as f:
             json.dump(summary_report, f, indent=2, ensure_ascii=False)
-        print(f"---Summary report generated successfully! Saved to:{summary_path} ---")
+        print(f"汇总报告生成成功，已保存到：{summary_path}")
     except Exception as e:
-        print(f" {e}")
+        print(f"{e}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Calculate objective metrics for dialogue evaluation, output single-file results, and generate an overall summary report."
+        description="计算对话评测的客观指标，输出单文件结果，并生成总体汇总报告。"
     )
     parser.add_argument(
         "files",
         metavar="FILE",
         nargs="+",
-        help="One or more input JSON file names. Wildcards are supported.",
+        help="一个或多个输入 JSON 文件名，支持通配符。",
     )
     parser.add_argument(
         "--summary-file",
         type=str,
         default="_overall_summary_metrics.json",
-        help="Specify the output file name for the summary report.",
+        help="指定汇总报告的输出文件名。",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
         default=None,
-        help="Directory to save per-file metric results. Defaults to the directory of --summary-file.",
+        help="保存逐文件指标结果的目录，默认使用 `--summary-file` 所在目录。",
     )
     args = parser.parse_args()
     summary_dir = os.path.dirname(args.summary_file) or "."

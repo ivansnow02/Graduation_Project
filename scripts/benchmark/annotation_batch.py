@@ -5,13 +5,13 @@ import os
 import sys
 from pathlib import Path
 
-# 尝试从 annotation.py 导入辅助函数
+# 尝试从 `annotation.py` 导入辅助函数
 try:
     sys.path.append(str(Path(__file__).parent.parent.parent))
     from scripts.benchmark.annotation import build_prompt, extract_first_json_array
 except ImportError:
     print(
-        "警告：无法从 annotation.py 导入辅助函数，请确认你是在项目根目录下运行。"
+        "警告：无法从 `annotation.py` 导入辅助函数，请确认你是在项目根目录下运行。"
     )
     sys.exit(1)
 
@@ -104,13 +104,13 @@ def prepare_batch_file(
 
                     total_chars += len(prompt)
 
-                    # 自定义 ID：req-{file_id}-{d_idx}-{p_idx}
+                    # 自定义 ID：`req-{file_id}-{d_idx}-{p_idx}`
                     custom_id = f"req-{file_id}-{idx}-{pair_idx}"
 
                     body = {
                         "model": model,
                         "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.0,  # 降低温度，保证输出的稳定性和一致性
+                        "temperature": 0.0,  # 降低温度，保证输出稳定一致
                         "max_tokens": 5000,
                     }
 
@@ -187,7 +187,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
             return
         output_p.mkdir(parents=True, exist_ok=True)
 
-    # 1. 解析 Batch 结果到映射表
+    # 解析 Batch 结果到映射表
     print(f"Reading batch results from {batch_output_path}...")
     results_map = {}  # { filename: { (d_idx, p_idx): annotations } }
 
@@ -211,7 +211,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
                     custom_id = res.get("custom_id", "")
 
                     parts = custom_id.split("-")
-                    # 格式：req-{file_id}-{d_idx}-{p_idx}
+                    # 格式：`req-{file_id}-{d_idx}-{p_idx}`
                     if len(parts) < 4 or parts[0] != "req":
                         continue
 
@@ -246,7 +246,7 @@ def merge_results(input_path: str, batch_output_path: str, final_output_path: st
         f"Processed total batch results: {success_count} success, {fail_count} failed."
     )
 
-    # 2. 遍历输入并写出结果
+    # 遍历输入并写出结果
     files = []
     if is_dir_mode:
         files = sorted(list(input_p.glob("*.jsonl")) + list(input_p.glob("*.json")))

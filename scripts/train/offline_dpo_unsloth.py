@@ -1,7 +1,4 @@
-"""
-Unsloth-accelerated DPO training script.
-Based on scripts/train/offline_dpo.py, scripts/train/sft_unsloth.py and zephyr_(7b)_dpo.py.
-"""
+
 
 from __future__ import annotations
 
@@ -9,7 +6,7 @@ import argparse
 import os
 import sys
 
-# IMPORTANT: Unsloth must be patched before transformers for DPO
+# 重要：用于 DPO 时必须先 patch Unsloth，再导入 transformers
 from unsloth import PatchDPOTrainer, FastLanguageModel, is_bfloat16_supported
 
 PatchDPOTrainer()
@@ -36,30 +33,30 @@ def parse_args() -> argparse.Namespace:
 
     p = argparse.ArgumentParser("Unsloth-accelerated Offline DPO Trainer")
 
-    # Data / paths
+    # 数据与路径
     p.add_argument("--dataset_repo", type=str, required=True, help="Path to dataset")
     p.add_argument("--output_dir", type=str, required=True)
     p.add_argument("--eval_ratio", type=float, default=0.1)
     p.add_argument("--min_score_gap", type=float, default=0.05)
 
-    # Model
+    # 模型
     p.add_argument(
         "--model_name", type=str, required=True, default="Qwen/Qwen3-14B-Instruct"
     )
     p.add_argument("--max_seq_length", type=int, default=4096)
     p.add_argument("--load_in_4bit", action="store_true", default=True)
 
-    # LoRA config
+    # LoRA 配置
     p.add_argument("--peft_r", type=int, default=64)
     p.add_argument("--peft_alpha", type=int, default=32)
-    p.add_argument("--peft_dropout", type=float, default=0)  # Unsloth supports 0
+    p.add_argument("--peft_dropout", type=float, default=0)  # Unsloth 支持 0
     p.add_argument(
         "--target_modules",
         type=str,
         default="q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj",
     )
 
-    # Training args
+    # 训练参数
     p.add_argument("--learning_rate", type=float, default=5e-6)
     p.add_argument("--num_train_epochs", type=int, default=1)
     p.add_argument("--per_device_train_batch_size", type=int, default=2)
@@ -102,7 +99,7 @@ def parse_args() -> argparse.Namespace:
         help="Whether larger metric value indicates better model.",
     )
 
-    # Misc
+    # 其他
     p.add_argument("--wandb_project", type=str, default=None)
     p.add_argument("--wandb_entity", type=str, default=None)
     p.add_argument("--use_swanlab", action="store_true", help="Enable SwanLab logging")
@@ -115,7 +112,7 @@ def main() -> None:
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # --- 1. Load Model with Unsloth ---
+    # 使用 Unsloth 加载模型
     print(f"Loading Unsloth model: {args.model_name}")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
@@ -124,15 +121,15 @@ def main() -> None:
         load_in_4bit=args.load_in_4bit,
     )
 
-    # Apply Chat Template (Qwen specific if needed, or rely on tokenizer_config.json)
-    # Zephyr example relies on proper template application.
-    # Qwen 2.5 usually has good template, but we can enforce it if needed.
+    # 应用聊天模板，如有需要可针对 Qwen 特化，也可以依赖 tokenizer_config.json
+    # Zephyr 示例依赖正确的模板应用
+    # Qwen 2.5 通常已有合适模板，但必要时可以显式指定
     from unsloth.chat_templates import get_chat_template
 
-    # If using Qwen models, ensure template is correct
+    # 如果使用 Qwen 模型，确保模板正确
     tokenizer = get_chat_template(tokenizer, chat_template="qwen3-instruct")
 
-    # Apply LoRA (skip if the loaded model already contains adapters)
+    # 应用 LoRA；如果加载的模型已经包含适配器，则跳过
     has_existing_lora = hasattr(model, "peft_config") and bool(
         getattr(model, "peft_config", None)
     )
@@ -153,7 +150,7 @@ def main() -> None:
             random_state=3407,
         )
 
-    # --- 2. Load Dataset ---
+    # 加载数据集
     print(f"Loading dataset from {args.dataset_repo}...")
     import json
     from datasets import Dataset, DatasetDict
@@ -175,31 +172,31 @@ def main() -> None:
             eval_ratio=args.eval_ratio, minimum_gap=args.min_score_gap
         )
 
-    # --- 3. Format Dataset ---
-    # Helper to strip assistant prefix if template adds it
+    # 格式化数据集
+    # 如模板自动添加 assistant 前缀，这里负责去除
     def _strip_prefix(s, pattern):
         return re.sub(f"^{re.escape(pattern)}", "", s)
 
-    # Standard Qwen assistant start token
+    # 标准 Qwen assistant 起始标记
     assistant_prefix = "<|im_start|>assistant\n"
 
     def process(row):
-        # Zephyr example uses apply_chat_template for prompt
-        # We assume row["prompt"] is messages list (upto user), row["chosen"]/["rejected"] are response strings
+        # Zephyr 示例对 prompt 使用 `apply_chat_template`
+        # 这里假设 `row["prompt"]` 是消息列表（到 user 为止），`chosen` / `rejected` 是回复字符串
 
-        # Apply template to prompt
-        # add_generation_prompt=True ensures it ends with assistant start token
+        # 为 prompt 应用模板
+        # `add_generation_prompt=True` 可确保结尾带有 assistant 起始标记
         if isinstance(row["prompt"], list):
             row["prompt"] = tokenizer.apply_chat_template(
                 row["prompt"], tokenize=False, add_generation_prompt=True
             )
 
-        # Format chosen/rejected responses
-        # NOTE: DPO expects chosen/rejected to be just the response text, NOT full convo
-        # However, if using chat template, sometimes we need to be careful.
-        # But typically for DPO with TRL, we provide prompt (history) and chosen/rejected (response only).
+        # 格式化 chosen / rejected 回复
+        # 注意：DPO 期望 chosen / rejected 只是回复文本，不是完整对话
+        # 但如果使用聊天模板，仍需特别注意
+        # 通常在 TRL 的 DPO 中，我们提供 prompt（历史）和 chosen / rejected（仅回复）
 
-        # Ensure EOS token is at the end
+        # 确保结尾带有 EOS token
         if not row["chosen"].endswith(tokenizer.eos_token):
             row["chosen"] = row["chosen"] + tokenizer.eos_token
         if not row["rejected"].endswith(tokenizer.eos_token):
@@ -213,7 +210,7 @@ def main() -> None:
     print("Formatting dataset...")
     ds = ds.map(process, num_proc=4, load_from_cache_file=False)
 
-    # --- 4. Configure Trainer ---
+    # 配置 Trainer
     dpo_config_kwargs = dict(
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
@@ -277,11 +274,11 @@ def main() -> None:
         callbacks=callbacks,
     )
 
-    # --- 5. Train ---
+    # 训练
     print(f"Starting DPO training...")
     dpo_trainer.train(resume_from_checkpoint=args.resume_ckpt_dir)
 
-    # --- 6. Save ---
+    # 保存
     print(f"Saving model to {args.output_dir}")
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)

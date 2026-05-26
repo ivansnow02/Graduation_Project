@@ -39,10 +39,10 @@ def is_conversational(example: dict[str, Any]) -> bool:
     if example_keys:
         key = example_keys.pop()  # 取出一个支持的键
         maybe_messages = example[key]
-        # 它应当是一个消息列表（list）
+        # 它应当是一个消息列表
         if isinstance(maybe_messages, list):
             maybe_message = maybe_messages[0]
-            # 每条消息应为包含 "role" 和 "content" 字段的字典
+            # 每条消息应为包含 `role` 和 `content` 字段的字典
             if (
                 isinstance(maybe_message, dict)
                 and "role" in maybe_message

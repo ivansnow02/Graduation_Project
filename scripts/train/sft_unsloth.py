@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-"""
-Modified SFT trainer using Unsloth for acceleration.
-Optimized for Qwen 3 (and Qwen 2.5) with SID dataset.
-"""
+
+
 
 from __future__ import annotations
 
@@ -90,7 +87,7 @@ def main() -> None:
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # --- 1. 配置 Logger ---
+    # 配置 Logger
     callbacks = []
     if args.use_swanlab and SWANLAB_INSTALLED:
         swanlab_callback = SwanLabCallback(
@@ -98,11 +95,11 @@ def main() -> None:
         )
         callbacks.append(swanlab_callback)
 
-    # --- 2. 加载数据 ---
+    # 加载数据
     print(f"Loading dataset from {args.dataset_repo}...")
     ds = MultiturnDataset(args.dataset_repo).to_sft_dataset(eval_ratio=args.eval_ratio)
 
-    # --- 3. 加载 Unsloth 模型 ---
+    # 加载 Unsloth 模型
     print(f"Loading Unsloth model: {args.model_name}")
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
@@ -111,7 +108,7 @@ def main() -> None:
         load_in_4bit=args.load_in_4bit,
     )
 
-    # --- 关键适配：Qwen 3 依然使用 ChatML 格式 ---
+    # 关键适配：Qwen 3 依然使用 ChatML 格式
     tokenizer = get_chat_template(tokenizer, chat_template="qwen3-instruct")
 
     # 配置 LoRA
@@ -126,7 +123,7 @@ def main() -> None:
         random_state=3407,
     )
 
-    # --- 4. 数据格式化 ---
+    # 数据格式化
     def formatting_prompts_func(examples):
         convos = examples["messages"]
         texts = [
@@ -140,11 +137,11 @@ def main() -> None:
     print("Formatting dataset...")
     ds = ds.map(formatting_prompts_func, batched=True)
 
-    # --- 5. 配置 Collator (针对 Qwen 3) ---
+    # 配置 Collator (针对 Qwen 3)
     # Qwen 3 的标准回答起始符依然是 <|im_start|>assistant\n
     response_template = "<|im_start|>assistant\n"
 
-    # --- 6. 配置 Trainer ---
+    # 配置 Trainer
     training_args = SFTConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.per_device_train_batch_size,
@@ -181,11 +178,11 @@ def main() -> None:
         response_part="<|im_start|>assistant\n",  # Qwen 3 / 2.5 的标准回答头，非常准确
     )
 
-    # --- 7. 开始训练 ---
+    # 开始训练
     print(f"Starting training for Qwen 3 model: {args.model_name}")
     trainer_stats = trainer.train()
 
-    # --- 8. 保存 ---
+    # 保存
     print(f"Saving to {args.output_dir}")
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)

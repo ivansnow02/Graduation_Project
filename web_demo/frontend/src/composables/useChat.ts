@@ -204,7 +204,7 @@ export function useChat() {
       : panelACompleted.value;
   });
 
-  // --- 持久化逻辑 ---
+  // 持久化逻辑
 
   function createDefaultPanelSnapshot() {
     return {
@@ -510,7 +510,7 @@ export function useChat() {
     }
   }
 
-  // --- 会话管理 ---
+  // 会话管理
 
   function setChatMode(mode: ChatMode) {
     if (chatMode.value === mode) return;
@@ -613,7 +613,7 @@ export function useChat() {
     },
   );
 
-  // --- 上下文压缩与聊天逻辑 ---
+  // 上下文压缩与聊天逻辑
 
   function buildHistory(panel: PanelState, maxRounds = 10): ChatMessage[] {
     const history: ChatMessage[] = [];

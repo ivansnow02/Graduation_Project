@@ -20,22 +20,20 @@ import os
 import sys
 from pathlib import Path
 
-# ============================================================================
-# Rewrite System Prompt — the "洗稿" instructions
-# ============================================================================
+# 重写系统提示词
 
 REWRITE_SYSTEM_PROMPT = """你是一位国内顶级的教育学博士后研究员，同时精通苏格拉底式教学法和跨学科教育。你的任务是对一位中学教师的对话回复进行"数据蒸馏"——在保留原意的基础上，全方位提升教学质量。
 
-## 【四项铁律】
+## 【四项要求】
 
-### 铁律一：跨学科知识注入（拉高 IKT）
+### 要求一：跨学科知识注入
 - **必须**引入一个**不同学科**的视角，且**显式提到该学科名称**（如"从地理角度看"、"物理学中"、"历史上"），让跨学科迁移一目了然。
 - ⚠️ **最高效的做法：把跨学科知识直接嵌入提问中**，一句话同时完成知识注入和提问。
 - 示例（最优——嵌入问句）："既然水的比热容在常见液体里最大，那从地理角度看，沿海和内陆城市的昼夜温差会有什么不同？"
 - 示例（合格——过渡+问句）："其实沿海城市温差小就是因为海水比热容大，那你觉得如果换成沙漠旁的湖泊，效果会一样吗？"
 - ⚠️ 必须结合学生认知水平，**严禁超纲学术词汇**（如氢键、分子极性等大学级概念）。
 
-### 铁律二：L3 高阶发问（拉高 L3 Guidance Rate）
+### 要求二：L3 高阶发问
 - 重写后的提问**必须**是开放式的迁移、推理或综合型问题。
 - **严禁**使用以下封闭式句式："是不是"、"对不对"、"对吗"、"会不会"（末尾语气词式）。
 - **严禁**使用选择性多选题句式（如"比如是A、是B，还是C？"）。
@@ -44,7 +42,7 @@ REWRITE_SYSTEM_PROMPT = """你是一位国内顶级的教育学博士后研究�
   - "你能从……的角度分析一下为什么会出现这种现象吗？"
   - "这背后的深层机制是什么？"
 
-### 铁律三：反刻板 & 策略多样化（拉高 Strategy Variety）
+### 要求三：反刻板并提高策略多样性
 - **黑名单——以下套话绝对禁用**：
   "那我们能不能思考"、"你有没有想过"、"你是否了解"、"你是否知道"、"那么你是否"、"对吗？"
 - **白名单——必须从以下教学策略中选择一种来组织语言**：
@@ -58,7 +56,7 @@ REWRITE_SYSTEM_PROMPT = """你是一位国内顶级的教育学博士后研究�
 - 每次重写时，**随机选取**其中一种策略，确保500条数据的策略分布均匀。
 - ⚠️ **因材施教原则**：当对话上下文中的学生表现出基础薄弱（如提问基础概念、表达困惑），优先使用策略3（类比）和策略5（拆解问题），用生活化语言帮助建立理解，而非直接灌输高阶知识。
 
-### 铁律四：引发迁移 & 认知拔高（拉高 StructureCompleteness & 3C Score）
+### 要求四：引发迁移并提升认知层次
 - **优先使用"引发迁移"教学意图**：将当前知识迁移到新场景或新学科，这是原始对话中最缺失的教学环节。
 - 不要顺着学生的话平行发问，要**往深处挖**，制造"认知落差"。
 - 如果学生回答**错误或模糊**，使用"正误反馈"或"拆解问题"策略，将大问题切碎。
@@ -73,19 +71,17 @@ REWRITE_SYSTEM_PROMPT = """你是一位国内顶级的教育学博士后研究�
 5. **结构铁律**：你的回复必须是**一段紧凑流畅的话**（2~4句），**严禁**使用换行符或分段。整段话应自然流畅地从"回应/肯定→知识补充→提问"一气呵成，**最后一句话必须以问号结尾**作为这个回复的终点。
 6. **⚠️ 绝对禁止"先铺垫再提问"的两段式结构**。知识注入要融入前半句的自然过渡中（如"其实……所以……那你觉得……？"），不能单独成段。"""
 
-# ============================================================================
-# 辅助：为单条重写请求构建用户侧 prompt
-# ============================================================================
+# 辅助函数：为单条重写请求构建用户侧提示词
 
 
 def build_rewrite_user_prompt(
     prompt_messages: list[dict],
     chosen_text: str,
 ) -> str:
-    """Build the user prompt from a DPO pair's prompt (history) and chosen text."""
+    """根据 DPO 对中的 prompt（历史）和 chosen 文本构建用户提示词。"""
 
-    # Format conversation context from prompt messages
-    # Filter out system messages — they are framework boilerplate, not useful for rewrite
+    # 格式化对话上下文
+    # 过滤 system 消息，这些是框架样板内容，对重写没有帮助
     context_lines = []
     for msg in prompt_messages:
         if msg["role"] == "system":
@@ -103,9 +99,7 @@ def build_rewrite_user_prompt(
 请根据四项铁律重写上述教师回复。只输出重写后的文本。"""
 
 
-# ============================================================================
-# convert：嵌套格式 → DPO 对列表（JSON）
-# ============================================================================
+# convert：嵌套格式转换为 DPO 对列表
 
 
 def convert_to_dpo(
@@ -113,9 +107,9 @@ def convert_to_dpo(
     output_path: str,
     min_score_gap: float = 0.0,
 ):
-    """Convert nested multiturn data to flat DPO pairs using MultiturnDataset."""
+    """使用 `MultiturnDataset` 将嵌套多轮数据转换为扁平的 DPO 对。"""
 
-    # 将项目根目录加入 sys.path，便于导入 collabllm
+    # 将项目根目录加入 `sys.path`，便于导入 `collabllm`
     project_root = Path(__file__).parent.parent.parent
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -129,7 +123,7 @@ def convert_to_dpo(
     dpo_ds = ds.to_dpo_dataset(eval_ratio=0.0, minimum_gap=min_score_gap)
     train_data = dpo_ds["train"]
 
-    # Convert to list of dicts and save
+    # 转换为字典列表并保存
     pairs = []
     for row in train_data:
         pairs.append({
@@ -149,9 +143,7 @@ def convert_to_dpo(
     return pairs
 
 
-# ============================================================================
 # prepare：从 DPO 对生成 Batch API JSONL 请求文件
-# ============================================================================
 
 
 def prepare_batch_file(
@@ -162,7 +154,7 @@ def prepare_batch_file(
     max_tokens: int = 4096,
     max_size_mb: float = 30.0,
 ):
-    """Read DPO pairs, and generate Batch API JSONL to rewrite each 'chosen'."""
+    """读取 DPO 对，并生成用于重写每个 `chosen` 的 Batch API JSONL。"""
 
     input_p = Path(input_path)
     if not input_p.exists():
@@ -175,7 +167,7 @@ def prepare_batch_file(
 
     print(f"Loaded {len(pairs)} DPO pairs (each 'chosen' is a leaf node).")
 
-    # Ensure output directory exists
+    # 确保输出目录存在
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
@@ -203,17 +195,17 @@ def prepare_batch_file(
             if not chosen_text:
                 continue
 
-            # Build the rewrite prompt
+            # 构建重写提示词
             user_prompt = build_rewrite_user_prompt(
                 prompt_messages=prompt_messages,
                 chosen_text=chosen_text,
             )
 
-            # Merge system + user into single user message (API compatibility)
+            # 将 system 和 user 合并为单条 user 消息，兼容 API
             full_prompt = REWRITE_SYSTEM_PROMPT + "\n\n---\n\n" + user_prompt
             total_chars += len(full_prompt)
 
-            # custom_id: rw-{pair_idx}
+            # `custom_id`: `rw-{pair_idx}`
             custom_id = f"rw-{pair_idx}"
 
             request_object = {
@@ -233,7 +225,7 @@ def prepare_batch_file(
             line_to_write = json.dumps(request_object, ensure_ascii=False) + "\n"
             line_bytes = len(line_to_write.encode("utf-8"))
 
-            # Rotate file if needed
+            # 如有需要则轮转文件
             if current_file_size + line_bytes > max_bytes and current_file_size > 0:
                 out_f.close()
                 current_part += 1
@@ -261,9 +253,7 @@ def prepare_batch_file(
     print(f"Estimated Tokens (char/2): {total_chars // 2:,}")
 
 
-# ============================================================================
 # merge：将批量 API 输出合并回 DPO 对
-# ============================================================================
 
 
 def merge_results(
@@ -271,7 +261,7 @@ def merge_results(
     batch_output_path: str,
     final_output_path: str,
 ):
-    """Merge rewritten chosen from Batch API output back into DPO pairs."""
+    """将 Batch API 输出中重写后的 `chosen` 合并回 DPO 对。"""
 
     input_p = Path(input_path)
     batch_p = Path(batch_output_path)
@@ -283,7 +273,7 @@ def merge_results(
         print(f"Error: Batch output {batch_output_path} not found.")
         return
 
-    # 1. Parse batch results → map
+    # 解析批量结果并建立映射
     print(f"Reading batch results from {batch_output_path}...")
     results_map: dict[int, str] = {}
 
@@ -305,7 +295,7 @@ def merge_results(
                     res = json.loads(line)
                     custom_id = res.get("custom_id", "")
 
-                    # Format: rw-{pair_idx}
+                    # 格式：`rw-{pair_idx}`
                     parts = custom_id.split("-")
                     if len(parts) != 2 or parts[0] != "rw":
                         continue
@@ -333,7 +323,7 @@ def merge_results(
 
     print(f"Parsed batch results: {success_count} success, {fail_count} failed.")
 
-    # 2. Load original DPO pairs and apply rewrites
+    # 加载原始 DPO 对并应用重写结果
     print(f"Loading DPO pairs from {input_path}...")
     with open(input_p, "r", encoding="utf-8") as f:
         pairs = json.load(f)
@@ -345,7 +335,7 @@ def merge_results(
             pair["chosen"] = results_map[pair_idx]
             rewrite_count += 1
 
-    # 3. Save
+    # 保存结果
     out_p = Path(final_output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
     with open(out_p, "w", encoding="utf-8") as f:
@@ -357,9 +347,7 @@ def merge_results(
     )
 
 
-# ============================================================================
 # 命令行接口（CLI）
-# ============================================================================
 
 
 def main():
@@ -370,7 +358,7 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # --- convert ---
+    # convert 子命令
     convert_parser = subparsers.add_parser(
         "convert",
         help="Convert nested multiturn data to flat DPO pairs",
@@ -388,7 +376,7 @@ def main():
         help="Minimum score gap between chosen and rejected",
     )
 
-    # --- prepare ---
+    # prepare 子命令
     prepare_parser = subparsers.add_parser(
         "prepare", help="Generate Batch API JSONL for rewriting chosen (leaf nodes)"
     )
@@ -409,7 +397,7 @@ def main():
         "--max-size", type=float, default=30.0, help="Max output file size in MB"
     )
 
-    # --- merge ---
+    # merge 子命令
     merge_parser = subparsers.add_parser(
         "merge", help="Merge batch results back into DPO pairs"
     )

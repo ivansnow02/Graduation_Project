@@ -70,8 +70,8 @@
 </template>
 
 <script setup lang="ts">
-// 应用入口：组合 useChat 提供的状态与操作，挂载主要布局和面板组件。
-// 该文件主要负责将业务逻辑与 UI 组件连接，不包含复杂逻辑实现。
+// 应用入口：组合 `useChat` 提供的状态与操作，挂载主要布局和面板组件
+// 该文件主要负责连接业务逻辑与 UI 组件，不包含复杂逻辑实现
 import { ref } from 'vue';
 import { useChat } from './composables/useChat';
 import type { AnnotationFieldKey } from './composables/useEvaluation';

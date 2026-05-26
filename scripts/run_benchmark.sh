@@ -1,33 +1,30 @@
 #!/usr/bin/env bash
-# =============================================================
 # Benchmark 流水线脚本
-# 用法:
+# 用法：
 #   ./scripts/run_benchmark.sh prepare <experiment_name> [model]
 #   ./scripts/run_benchmark.sh eval <experiment_name>
 #   ./scripts/run_benchmark.sh all <experiment_name> [model]
 #
-# 示例 (dpow1):
-#   # 阶段1: 生成 batch 请求文件
+# 示例（dpow1）：
+#   # 阶段 1：生成 batch 请求文件
 #   ./scripts/run_benchmark.sh prepare dpow1
 #
-#   # (手动) 上传 data/batch/dpow1/batch.jsonl，等待处理完成后
-#   #        下载结果到 data/batchoutput/dpow1/
+#   # （手动）上传 `data/batch/dpow1/batch.jsonl`，等待处理完成后
+#   # 下载结果到 `data/batchoutput/dpow1/`
 #
-#   # 阶段2: 合并 + 评测
+#   # 阶段 2：合并 + 评测
 #   ./scripts/run_benchmark.sh eval dpow1
 #
-#   # 一次性全跑 (prepare → 暂停等待手动操作 → eval)
+#   # 一次性全跑（prepare -> 暂停等待手动操作 -> eval）
 #   ./scripts/run_benchmark.sh all dpow1
-# =============================================================
-
 set -euo pipefail
 
-# ─── 参数解析 ───────────────────────────────────────────────
+# 参数解析
 ACTION="${1:?用法: $0 <prepare|eval|all> <experiment_name> [model]}"
 EXPERIMENT="${2:?请指定实验名称，例如: dpow1}"
 MODEL="${3:-qwen-flash}"
 
-# ─── 路径定义 ───────────────────────────────────────────────
+# 路径定义
 DIALOG_DIR="data/dialog/${EXPERIMENT}"
 BATCH_DIR="data/batch/${EXPERIMENT}"
 BATCH_FILE="${BATCH_DIR}/batch.jsonl"
@@ -36,10 +33,10 @@ FINAL_DIR="data/final/${EXPERIMENT}"
 METRICS_DIR="data/metrics/${EXPERIMENT}_per_file_metrics"
 METRICS_FILE="data/metrics/${EXPERIMENT}.json"
 
-# ─── 阶段1: prepare ────────────────────────────────────────
+# 阶段 1：prepare
 do_prepare() {
     echo "═══════════════════════════════════════════════════"
-    echo "  [阶段1] Prepare: ${EXPERIMENT}"
+    echo "  [阶段 1] Prepare: ${EXPERIMENT}"
     echo "═══════════════════════════════════════════════════"
 
     if [ ! -d "${DIALOG_DIR}" ]; then
@@ -64,20 +61,20 @@ do_prepare() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
-# ─── 阶段2: merge + eval ───────────────────────────────────
+# 阶段 2：merge + eval
 do_eval() {
     echo "═══════════════════════════════════════════════════"
     echo "  [阶段2] Merge + Eval: ${EXPERIMENT}"
     echo "═══════════════════════════════════════════════════"
 
-    # 检查 batchoutput 是否存在
+    # 检查 `batchoutput` 是否存在
     if [ ! -d "${BATCH_OUTPUT_DIR}" ] || [ -z "$(ls -A ${BATCH_OUTPUT_DIR}/*.jsonl 2>/dev/null)" ]; then
         echo "❌ 错误: Batch 输出目录为空或不存在: ${BATCH_OUTPUT_DIR}"
         echo "   请先上传 batch 并下载结果到该目录。"
         exit 1
     fi
 
-    # Merge
+    # 合并
     echo "🔀 合并标注结果..."
     mkdir -p "${FINAL_DIR}"
     uv run scripts/benchmark/annotation_batch.py merge \
@@ -85,7 +82,7 @@ do_eval() {
         -b "${BATCH_OUTPUT_DIR}"/*.jsonl \
         -o "${FINAL_DIR}/"
 
-    # Eval
+    # 评测
     echo "📊 运行客观评测..."
     mkdir -p "${METRICS_DIR}"
     uv run scripts/benchmark/objective_eval.py \
@@ -99,7 +96,7 @@ do_eval() {
     echo "   📁 逐文件指标: ${METRICS_DIR}/"
 }
 
-# ─── all: 两阶段合一 ───────────────────────────────────────
+# all：两阶段合一
 do_all() {
     do_prepare
 
@@ -110,7 +107,7 @@ do_all() {
     do_eval
 }
 
-# ─── 主逻辑 ─────────────────────────────────────────────────
+# 主逻辑
 case "${ACTION}" in
     prepare)
         do_prepare

@@ -33,7 +33,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        # logging.StreamHandler(),  <-- 注释掉这行，让控制台清爽一点
         logging.FileHandler("generation.log", encoding="utf-8")
     ],
 )
@@ -121,7 +120,7 @@ def build_messages_from_history(history, speaker):
     return messages
 
 
-# 2. 业务逻辑（Prompt）
+# 业务逻辑（Prompt）
 
 
 def generate_initial_student_question(topic_text):
@@ -241,7 +240,7 @@ def generate_summary(history):
 def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     history = []
 
-    # 1. 学生提问
+    # 学生提问
     question = generate_initial_student_question(topic_text)
     if not question or "[RateLimit]" in question:
         return None
@@ -256,7 +255,7 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     while turns < max_turns:
         turns += 1
 
-        # 2. 老师回复
+        # 老师回复
         teacher_reply = generate_teacher_response(history)
         if not teacher_reply or "[RateLimit]" in teacher_reply:
             break
@@ -273,7 +272,7 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
                 history.append({"role": "教师", "content": summary})
             break
 
-        # 3. 学生回复
+        # 学生回复
         student_reply, identity, scenario = generate_student_response(history)
         if not student_reply or "[RateLimit]" in student_reply:
             break
@@ -291,7 +290,7 @@ def generate_full_dialogue(topic_text, student_id, min_turns=3, max_turns=8):
     }
 
 
-# 3. 多进程与文件写入
+# 多进程与文件写入
 
 
 def worker_process_topic(args):

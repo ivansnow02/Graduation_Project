@@ -32,7 +32,7 @@ class BaseMetric(abc.ABC):
         messages: Optional[List[Dict[str, str]]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Union[float, Dict[str, float]]:
-        """Compute the metric(s) for a prompt–completion pair."""
+        """计算 prompt–completion 对的度量指标值。"""
 
 
 # 通用驱动
@@ -126,7 +126,7 @@ class SingleTurnOrChatMetric:
             payload = (
                 extract_json(response)
                 if isinstance(response, str)
-                else response  # Already parsed
+                else response  # 已解析
             )
             logger.info("Extractor 输出: %s", payload)
             # 验证提取结果包含预期字段 thought 和 final_completion
@@ -141,7 +141,7 @@ class SingleTurnOrChatMetric:
             logger.error("JSON 提取失败: %s", e)
             raise RuntimeError("无法解析 extractor 的输出；详细信息请查看日志。") from e
 
-    # 注册装饰器
+# 注册装饰器
     @classmethod
     def register_metric(cls, name: str):
         """装饰器：将 `metric_cls` 注册到全局注册表中，供签名调用使用。"""

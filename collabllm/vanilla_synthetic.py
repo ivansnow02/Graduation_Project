@@ -69,7 +69,7 @@ def generate_singleturn_dataset(
         "turns": [],
     }
 
-    # 1) 初始用户轮
+    # 初始用户轮
     first_user_msg = sim.run_chat_simulation(
         **base_sim_args,
         num_samples=1,
@@ -80,9 +80,9 @@ def generate_singleturn_dataset(
     )[0][-1]
     chat_history.append(first_user_msg)
 
-    # 2) 循环生成直到达到最大轮数
+    # 循环生成直到达到最大轮数
     while len(chat_history) < max_total_turns:
-        # a) 采样助手候选回复
+        # 采样助手候选回复
         candidate_hists = sim.run_chat_simulation(
             **base_sim_args,
             proact_prompt_ratio=proact_prompt_ratio,
@@ -103,7 +103,7 @@ def generate_singleturn_dataset(
             logger.warning("No candidate completions generated. Terminating early.")
             break
 
-        # b) 使用单轮奖励对每个候选进行评分（不模拟未来）
+        # 使用单轮奖励对每个候选进行评分，不模拟未来
         turn_prompt = list(chat_history)  # 复制到用户轮为止的历史
         responses_with_scores: List[Dict[str, Any]] = []
         scores: List[float] = []
@@ -151,7 +151,7 @@ def generate_singleturn_dataset(
             "responses": responses_with_scores,
         })
 
-        # c) 选取得分最高的助手回复，继续对话线程
+        # 选取得分最高的助手回复，继续对话线程
         best_idx = int(max(range(len(scores)), key=lambda i: scores[i]))
         best_response = responses_with_scores[best_idx]["completion"]
         chat_history.append({"role": "assistant", "content": best_response})
@@ -159,7 +159,7 @@ def generate_singleturn_dataset(
         if len(chat_history) >= max_total_turns:
             break
 
-        # d) 基于最佳助手回复模拟下一条用户回复
+        # 基于最佳助手回复模拟下一条用户回复
         next_user_hists = sim.run_chat_simulation(
             **base_sim_args,
             num_samples=1,

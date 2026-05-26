@@ -23,11 +23,11 @@ from collabllm.datasets.multiturn import MultiturnDataset
 from collabllm.synthetic import generate_multiturn_dataset
 from examples.single_turn_ds import datasets_info
 
-# examples.metrics now archived; teaching_quality is auto-registered by collabllm.metric.py
+# `examples.metrics` 已归档；`teaching_quality` 由 `collabllm.metric.py` 自动注册
 try:
     from examples.metrics import *  # noqa: F401, F403
 except ImportError:
-    pass  # Old metrics are archived; main pipeline uses teaching_quality only
+    pass  # 旧指标已归档，主流程只使用 `teaching_quality`
 
 
 def compute_hash(text: str) -> str:
@@ -134,7 +134,7 @@ def data_engine(args):
             continue
 
         if repeat_sampling:
-            # Use the global index as ID to ensure uniqueness/traceability
+            # 使用全局索引作为 ID，确保唯一性和可追踪性
             sample_id = f"{idx:06d}"
             pending_examples.append((sample_id, ex))
         else:

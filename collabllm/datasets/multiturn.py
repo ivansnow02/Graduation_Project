@@ -5,16 +5,16 @@ collabllm.datasets.multiturn
 
 初始化支持三种输入形式：
 
-1. 扁平列表 (`List[dict]`)，每行包含必需字段：
+- 扁平列表 (List[dict])，每行包含必需字段：
      {'prompt', 'completion', 'conv_id', 'score',
         'single_turn_prompt', 'single_turn_completion', 'single_turn_metadata'}
 
-2. 嵌套结构（每个对话为一个 dict）：
+- 嵌套结构（每个对话为一个 dict）：
      参考文件中常见的嵌套格式，包含 conv_id、turns 等字段。
 
-3. 本地 HF 数据集目录（`Dataset.save_to_disk` 保存的目录）或 HF Hub 仓库 ID（字符串）。
+- 本地 HF 数据集目录（Dataset.save_to_disk 保存的目录）或 HF Hub 仓库 ID（字符串）。
 
-内部统一将数据转换为扁平的 `self.data`（List[dict]），包含字段：
+内部统一将数据转换为扁平的 self.data（List[dict]），包含字段：
 {prompt, completion, conv_id, score, single_turn_prompt, single_turn_completion,
  single_turn_metadata, turn_id}
 
@@ -89,7 +89,7 @@ class MultiturnDataset:
         Args:
             data_or_local_dir_or_hf_repo_or_nested:
                 扁平字典列表（旧格式），或嵌套对话列表（新格式），或本地由
-                `Dataset.save_to_disk` 保存的目录路径，或 HF Hub 仓库 ID。
+                Dataset.save_to_disk 保存的目录路径，或 HF Hub 仓库 ID。
             seed:
                 用于均匀拆分的随机种子。
             add_system_prompt:
@@ -100,7 +100,7 @@ class MultiturnDataset:
             [{"role": "system", "content": SYSTEM_PROMPT}] if add_system_prompt else []
         )
 
-        # 1) Load raw data into `raw_list` of dicts
+        # 加载原始数据到字典的 raw_list 中
         if isinstance(data_or_local_dir_or_hf_repo_or_nested, list):
             raw_list = data_or_local_dir_or_hf_repo_or_nested
         elif os.path.exists(str(data_or_local_dir_or_hf_repo_or_nested)):
@@ -144,7 +144,7 @@ class MultiturnDataset:
                 "Loaded dataset is empty (or contains only empty entries)."
             )
 
-        # 2) 检测是否为嵌套结构：检查第一个元素是否包含 "turns" 键
+        # 检测是否为嵌套结构：检查第一个元素是否包含 "turns" 键
         if isinstance(raw_list[0], dict) and "turns" in raw_list[0]:
             self.data = self._flatten_nested(raw_list)
         elif isinstance(raw_list[0], dict):
@@ -153,7 +153,7 @@ class MultiturnDataset:
                 missing = _REQUIRED - set(raw_list[0])
                 raise ValueError(f"Missing required keys in flat data: {missing}")
 
-            # Auto-fill turn_id if missing
+            # 如果缺失 turn_id 则自动填充
             for row in raw_list:
                 if not isinstance(row.get("prompt"), Sequence):
                     raise TypeError(
@@ -235,7 +235,7 @@ class MultiturnDataset:
         """
         flat = []
         for base_conv_id, convo in enumerate(nested):
-            # Validate presence of required conversation-level keys
+            # 验证必需的会话级别键是否存在
             for key in {
                 "single_turn_prompt",
                 "single_turn_completion",
@@ -396,7 +396,7 @@ class MultiturnDataset:
         n_eval: Optional[int] = None,
         eval_ratio: Optional[float] = 0.0,
     ) -> DatasetDict:
-        # Keep exactly one row per (conv_id, turn_id)
+        # 每个 (conv_id, turn_id) 只保留一行记录
         unique: Dict[tuple, Dict[str, Any]] = {}
         for r in self.data:
             key = (r["conv_id"], r["turn_id"])

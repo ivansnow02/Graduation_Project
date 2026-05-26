@@ -17,7 +17,7 @@ from collabllm.utils.template import strip_system_prompt
 logger = logging.getLogger(__name__)
 
 
-# Metric helper
+# 指标辅助函数
 def _score_one_metric(
     metric_name: str,
     messages: List[Dict[str, str]],
@@ -38,13 +38,13 @@ def _score_one_metric(
     return cast(float, res)
 
 
-# 公共 API
+# 公共接口
 def singleturn_reward(
     *,
     single_turn_prompt: str,
     single_turn_completion: str,
     metric_names: Sequence[str],
-    chat_history: List[Dict[str, str]],  # 已包含了候选的 assistant response
+    chat_history: List[Dict[str, str]],  # 已包含候选的助手回复
     reward_generation_kwargs: Dict[str, Any] | None = None,
     metadata: Dict[str, Any] | None = None,
     metric_weights: Sequence[float] | None = None,
@@ -58,10 +58,10 @@ def singleturn_reward(
     if len(metric_weights) != len(metric_names):
         raise ValueError("`metric_weights` length must equal `metric_names` length")
 
-    # 1. 去除 system 消息
+    # 去除 system 消息
     messages = strip_system_prompt(chat_history)
 
-    # 2. 计算各项指标得分
+    # 计算各项指标得分
     reward_dict: Dict[str, float] = {}
     mr_score = 0.0
 

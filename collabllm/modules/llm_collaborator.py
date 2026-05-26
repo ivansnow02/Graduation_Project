@@ -37,7 +37,7 @@ class LLMCollaborator(object):
         self.num_retries = num_retries
         self.llm_kwargs = {"temperature": 0.8, "max_tokens": 2048, **llm_kwargs}
 
-        # 支持使用 base_url 字段来兼容 vLLM/OpenAI 风格的后端配置
+        # 支持使用 `base_url` 字段兼容 vLLM/OpenAI 风格后端
         if "base_url" in self.llm_kwargs:
             self.llm_kwargs["api_base"] = self.llm_kwargs.pop("base_url")
 
@@ -54,7 +54,7 @@ class LLMCollaborator(object):
 
         if self.method == "none":
             if len(messages) and messages[0]["role"] == "system":
-                logger.info("检测到 system 消息。")
+                logger.info("检测到 system 消息")
         else:
             kwargs = {}
             prompt = PROACT_MODEL_PROMPT.format(
@@ -80,7 +80,7 @@ class LLMCollaborator(object):
                 if isinstance(full_response, str) and not (self.method == "none"):
                     full_response = extract_json(full_response)
             except Exception as e:
-                logger.error(f"[LLMCollaborator] JSON 提取错误: {e}")
+                logger.error(f"[LLMCollaborator] JSON 提取错误：{e}")
                 continue
 
             if isinstance(full_response, dict):

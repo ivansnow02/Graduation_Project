@@ -21,7 +21,7 @@ from collabllm.utils.template import strip_system_prompt
 logger = logging.getLogger(__name__)
 
 
-# Metric helper
+# 指标辅助函数
 def _score_one_metric(
     metric_name: str,
     messages: List[Dict[str, str]],
@@ -42,12 +42,12 @@ def _score_one_metric(
     return cast(float, res)
 
 
-# 统计汇总表
+# 统计汇总
 def _log_reward_summary(reward_dict: Dict[str, List[float]]) -> None:
-    """Compute mean / std for each metric list in `reward_dict` and log."""
+    """计算 `reward_dict` 中每个指标列表的均值和标准差并打印日志。"""
     rows = []
     for metric, vals in reward_dict.items():
-        # vals 在评估后总是列表形式（包括 "MR"）
+        # 评估后 `vals` 始终是列表形式，包括 `MR`
         mu = stats.mean(vals)
         sd = stats.stdev(vals) if len(vals) > 1 else 0.0
         rows.append((metric, f"{mu:.3f}", f"{sd:.3f}"))
@@ -68,7 +68,7 @@ def _log_reward_summary(reward_dict: Dict[str, List[float]]) -> None:
     logger.info("Reward statistics:%s", table)
 
 
-# 公共 API
+# 公共接口
 def multiturn_aware_reward(
     *,
     task_desc: str,
@@ -90,21 +90,21 @@ def multiturn_aware_reward(
     if len(metric_weights) != len(metric_names):
         raise ValueError("`metric_weights` length must equal `metric_names` length")
 
-    # 1. 一次性生成所有会话
+    # 先生成全部会话
     sessions = ChatSessionSimulator().run_chat_simulation(
         task_desc=task_desc,
         single_turn_prompt=single_turn_prompt,
         log_prefix="[Deduction] ",
         **chat_simulation_kwargs,
-    )  # → List[List[dict]]
+    )
     # 去除可能存在的 system 消息
     sessions = [strip_system_prompt(session) for session in sessions]
 
-    # 2. 准备结果容器
+    # 准备结果容器
     reward_dict: Dict[str, List[float]] = {m: [] for m in metric_names}
     reward_dict["MR"] = []
 
-    # 3. 指标评估（对每个会话 × 指标进行并行计算）
+    # 并行计算每个会话和指标的分数
     n_conv = len(sessions)
     # 初始化存储结构
     for m in metric_names:
@@ -124,7 +124,7 @@ def multiturn_aware_reward(
                     single_turn_completion,
                     metadata,
                 )
-                # 保存上下文：对应会话、指标和权重索引
+                # 保存上下文，对应会话、指标和权重索引
                 fut_to_ctx[fut] = (conv_idx, i, metric_name)
 
         for fut in as_completed(fut_to_ctx):
@@ -132,7 +132,7 @@ def multiturn_aware_reward(
             score = fut.result()
             reward_dict[metric_name][conv_idx] = score
 
-    # 4. 聚合并计算 Multiturn-aware Reward (MR)
+    # 聚合并计算多轮奖励（MR）
     for conv_idx in range(n_conv):
         reward_dict["MR"][conv_idx] = sum(
             reward_dict[m][conv_idx] * metric_weights[i]

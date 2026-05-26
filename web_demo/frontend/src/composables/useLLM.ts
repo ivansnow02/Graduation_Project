@@ -1,5 +1,5 @@
 /**
- * useLLM - 直接使用 OpenAI SDK 调用 LLM API（支持 vLLM / DashScope 等兼容端点）
+ * useLLM：直接使用 OpenAI SDK 调用 LLM API，支持 vLLM / DashScope 等兼容端点
  */
 import OpenAI from "openai";
 
@@ -22,13 +22,13 @@ interface StreamCallbacks {
 
 export function useLLM() {
   /**
-   * 创建 OpenAI 客户端（支持任意 OpenAI 兼容端点）
+   * 创建 OpenAI 客户端，支持任意 OpenAI 兼容端点
    */
   function createClient(model: ModelConfig): OpenAI {
     return new OpenAI({
       apiKey: model.apiKey,
       baseURL: model.baseUrl,
-      dangerouslyAllowBrowser: true, // 演示系统，允许浏览器端使用
+      dangerouslyAllowBrowser: true, // 演示系统，允许在浏览器端使用
     });
   }
 
@@ -68,7 +68,7 @@ export function useLLM() {
       onDone();
     } catch (err: any) {
       if (err?.name === "AbortError") return;
-      // 把发生的错误以字符串形式回传给调用方，调用方负责展示或处理
+      // 将错误以字符串形式回传给调用方，由调用方负责展示或处理
       onError(err?.message || String(err));
     }
   }

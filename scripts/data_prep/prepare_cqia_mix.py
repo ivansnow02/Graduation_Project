@@ -23,8 +23,8 @@ from collections import Counter
 from datasets import load_dataset
 
 
-# COIG-CQIA 中我们感兴趣的百科/考试/知识类子集
-# 参考: https://huggingface.co/datasets/m-a-p/COIG-CQIA
+# COIG-CQIA 中关注的百科、考试和知识类子集
+# 参考：https://huggingface.co/datasets/m-a-p/COIG-CQIA
 TARGET_TASK_TYPES = {
     "百科",
     "考试",
@@ -35,7 +35,7 @@ TARGET_TASK_TYPES = {
     "知识问答",
 }
 
-# 宽泛关键词匹配（如果 task_type 不在上面的集合里，用关键词兜底）
+# 宽泛关键词匹配：如果 `task_type` 不在上面的集合里，就用关键词兜底
 TARGET_KEYWORDS = ["百科", "考试", "wiki", "知识", "问答", "exam", "knowledge"]
 
 
@@ -56,7 +56,7 @@ def cqia_to_flat_row(item: dict, idx: int) -> dict | None:
     inp = (item.get("input") or "").strip()
     output = (item.get("output") or "").strip()
 
-    # 拼接 instruction + input 作为用户问题
+    # 拼接 instruction 和 input 作为用户问题
     if inp:
         user_content = f"{instruction}\n{inp}"
     else:
@@ -67,7 +67,7 @@ def cqia_to_flat_row(item: dict, idx: int) -> dict | None:
         return None
     if len(output) < 10:  # 回答太短
         return None
-    if len(output) > 4000:  # 回答太长，可能超 max_seq_length
+    if len(output) > 4000:  # 回答太长，可能超过 `max_seq_length`
         return None
 
     conv_id = f"cqia_{idx:06d}_{uuid.uuid4().hex[:8]}"
@@ -113,7 +113,7 @@ def main():
     args = parser.parse_args()
     random.seed(args.seed)
 
-    # ── 1. 加载现有 SFT 数据 ──
+    # 加载现有 SFT 数据
     print(f"📂 加载现有 SFT 数据: {args.sft_data}")
     sft_rows = []
     with open(args.sft_data, "r", encoding="utf-8") as f:
@@ -127,7 +127,7 @@ def main():
     n_sft_convs = len(sft_conv_ids)
     print(f"   📊 唯一会话数: {n_sft_convs}")
 
-    # ── 2. 计算 CQIA 抽样数量 ──
+    # 计算 CQIA 抽样数量
     # cqia_ratio = cqia_count / (sft_count + cqia_count)
     # → cqia_count = sft_count * ratio / (1 - ratio)
     n_cqia = math.ceil(n_sft_convs * args.cqia_ratio / (1 - args.cqia_ratio))

@@ -11,7 +11,7 @@ def parse_messages(messages, strip_sys_prompt=True):
     Args:
         messages: List[dict]
             包含 role 和 content 的消息列表。
-            例如：messages = [{'role': 'user', 'content': 'Hello!'}, ...]
+            例如：`messages = [{'role': 'user', 'content': 'Hello!'}, ...]`
     """
     if messages is None:
         return ""
@@ -30,6 +30,6 @@ def strip_system_prompt(messages):
     Args:
         messages: List[dict]
             包含 role 和 content 的消息列表。
-            例如：messages = [{'role': 'user', 'content': 'Hello!'}, ...]
+            例如：`messages = [{'role': 'user', 'content': 'Hello!'}, ...]`
     """
     return [msg for msg in messages if msg["role"] != "system"]

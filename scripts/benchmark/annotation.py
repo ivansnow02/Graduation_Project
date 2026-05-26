@@ -6,18 +6,18 @@ from time import sleep
 
 import requests
 
-# 加载 .env 文件
+# 加载 `.env` 文件
 try:
     from dotenv import load_dotenv
 
     load_dotenv(Path(__file__).parent / ".env")
 except ImportError:
-    pass  # dotenv 不可用时忽略
+    pass  # `dotenv` 不可用时忽略
 
 
 # LM Studio API 配置
 LM_STUDIO_API_URL = os.getenv("LM_STUDIO_API_URL", "http://localhost:1234/v1")
-# 支持多个模型，用逗号分隔，例如: "model1,model2"
+# 支持多个模型，用逗号分隔，例如 `model1,model2`
 ANNOTATION_MODELS = [
     m.strip() for m in os.getenv("ANNOTATION_MODELS", "").split(",") if m.strip()
 ]
@@ -39,7 +39,7 @@ API_TIMEOUT = 300
 def call_lm_studio(prompt: str, model: str) -> str:
     """调用 LM Studio API 生成回复。"""
     try:
-        # print(f"DEBUG: Sending request to model {model}...")
+        # 调试输出：发送请求到模型
         response = requests.post(
             f"{LM_STUDIO_API_URL}/chat/completions",
             json={
@@ -52,7 +52,7 @@ def call_lm_studio(prompt: str, model: str) -> str:
             timeout=API_TIMEOUT,
         )
         response.raise_for_status()
-        # print(f"DEBUG: Received response from model {model}.")
+        # 调试输出：已收到模型响应
         return response.json()["choices"][0]["message"]["content"]
     except requests.exceptions.ConnectionError:
         raise RuntimeError(
@@ -160,7 +160,7 @@ def annotate_pair(dialogue_pair, model: str):
     try:
         return json.loads(json_str)
     except Exception as e:
-        # Try to use ast.literal_eval as a fallback for Python-style dicts (e.g. single quotes)
+        # 兼容 Python 风格字面量时，回退到 `ast.literal_eval`
         try:
             import ast
 
@@ -204,7 +204,7 @@ def process_entry(entry, idx, models):
             break
 
         pair_idx = i // 2 + 1
-        # print(f"[Conv {idx}] Annotating pair {pair_idx}/{num_pairs}...")
+        # 调试输出：标注当前对话对
         ann = annotate_pair(pair, model)
         if ann:
             annotations.extend(ann)
@@ -248,7 +248,7 @@ def annotate_dialogue_file(input_path, output_path):
     )
     with open(output_path, mode, encoding="utf-8") as out_file:
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            # Submit all tasks, passing the list of models
+            # 提交所有任务，并传入模型列表
             futures = [
                 executor.submit(process_entry, t[0], t[1], ANNOTATION_MODELS)
                 for t in tasks

@@ -15,11 +15,11 @@ def extract_json(s):
         raise ValueError("No JSON object or array found")
 
     if idx_brace != -1 and (idx_bracket == -1 or idx_brace < idx_bracket):
-        # 检测到 JSON 对象（以 '{' 开始）
+        # 检测到 JSON 对象，以 `{` 开头
         json_start = idx_brace
         json_end = s.rfind("}")
     else:
-        # 检测到 JSON 数组（以 '[' 开始）
+        # 检测到 JSON 数组，以 `[` 开头
         json_start = idx_bracket
         json_end = s.rfind("]")
 
@@ -133,7 +133,7 @@ def parse_string(s, pos):
             result += escape_sequences.get(c, c)
         elif c == quote_char:
             pos += 1
-            # 尝试将字符串内容转换为数字（如果可能的话）
+            # 尝试将字符串内容转换为数字
             converted_value = convert_value(result)
             return converted_value, pos
         else:
@@ -154,7 +154,7 @@ def parse_triple_quoted_string(s, pos):
     while pos < len(s):
         if s[pos : pos + 3] == quote_str:
             pos += 3
-            # 尝试将三引号字符串内容转换为数字（如可能）
+            # 尝试将三引号字符串内容转换为数字
             converted_value = convert_value(result)
             return converted_value, pos
         else:
@@ -203,4 +203,4 @@ def convert_value(value):
         else:
             return int(value)
     except ValueError:
-        return value  # 如果不能转换为数字，则作为字符串返回
+        return value  # 无法转换为数字时，按字符串返回

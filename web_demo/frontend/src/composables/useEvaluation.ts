@@ -345,8 +345,8 @@ function assertEvaluatorConfig(model: ModelConfig) {
   }
 }
 
-// 说明：useEvaluation 提供调用评测模型生成逐轮 annotation 的功能，
-// 并封装评价计算与可用性检查逻辑。
+// 说明：`useEvaluation` 负责调用评测模型生成逐轮 annotation，
+// 并封装评价计算与可用性检查逻辑
 export function useEvaluation() {
   const { completeChat } = useLLM();
 
@@ -372,7 +372,7 @@ export function useEvaluation() {
       temperature: 0,
       maxTokens: 5000,
     });
-    // 解析并验证 annotations（若解析失败则抛错，交由上层处理）
+    // 解析并验证 annotations，若解析失败则抛错交由上层处理
     const annotations = parseAnnotations(rawText);
     const metrics = calculateObjectiveMetrics(annotations);
     if (!metrics) {

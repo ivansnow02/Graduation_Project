@@ -4,9 +4,9 @@ collabllm.datasets.types
 数据类定义：支持 SID (Socratic Interdisciplinary Dialogue) 数据的结构化表示。
 
 包含三层结构：
-  1. DialogueTurn: 单轮对话（角色 + 内容）
-  2. Annotation: 单条注释（标注的教学/学生信息）
-  3. TeachingSession: 完整的教学会话（学生信息、对话、标注、质量分数）
+- DialogueTurn: 单轮对话（角色 + 内容）
+- Annotation: 单条注释（标注的教学/学生信息）
+- TeachingSession: 完整的教学会话（学生信息、对话、标注、质量分数）
 """
 
 from dataclasses import asdict, dataclass, field
@@ -18,7 +18,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# DialogueTurn
+# 对话轮次
 @dataclass
 class DialogueTurn:
     """
@@ -65,7 +65,7 @@ class DialogueTurn:
         )
 
 
-# Annotation
+# 标注
 @dataclass
 class Annotation:
     """
@@ -161,7 +161,7 @@ class Annotation:
         return cls(**filtered_data)
 
 
-# TeachingSession: 完整教学会话
+# TeachingSession：完整教学会话
 @dataclass
 class TeachingSession:
     """
@@ -189,7 +189,7 @@ class TeachingSession:
     annotations: List[Annotation]
     quality_score: float = 0.0
 
-    # 缓存字段，在需要时计算
+    # 缓存字段，按需计算
     _teacher_turns_cache: Optional[List[DialogueTurn]] = field(
         default=None, init=False, repr=False
     )
@@ -275,9 +275,7 @@ class TeachingSession:
         """转换为 JSON 字符串"""
         return json.dumps(self.to_dict(), ensure_ascii=False)
 
-    # ================================================================
     # 统计和访问方法
-    # ================================================================
 
     def get_dialogue_length(self) -> int:
         """获取对话轮次总数"""
@@ -353,9 +351,7 @@ class TeachingSession:
         """获取独特的教师教学意图集合"""
         return set(self.get_teacher_intents())
 
-    # ================================================================
     # 清洗和验证方法
-    # ================================================================
 
     def check_consistency(self) -> bool:
         """
@@ -425,9 +421,7 @@ class TeachingSession:
             )
         return is_long_enough
 
-    # ================================================================
     # 统计摘要
-    # ================================================================
 
     def get_summary(self) -> Dict[str, Any]:
         """

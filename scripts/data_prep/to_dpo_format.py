@@ -31,14 +31,14 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"保存到 {args.output_dir}...")
-    # 如果需要可手动控制保存格式，否则可使用 save_to_disk / to_json
-    # 这里手动保存以确保编码和格式（ensure_ascii=False）
+    # 如需可手动控制保存格式，否则也可以使用 `save_to_disk` 或 `to_json`
+    # 这里手动保存以确保编码和格式（`ensure_ascii=False`）
     import json
 
     for split, dataset in dpo_ds.items():
         output_path = os.path.join(args.output_dir, f"{split}.json")
         print(f"Saving {split} split to {output_path} ({len(dataset)} examples)...")
-        # Convert dataset split to a list of dicts
+        # 将数据集切分转换为字典列表
         data_list = [item for item in dataset]
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data_list, f, ensure_ascii=False, indent=2)

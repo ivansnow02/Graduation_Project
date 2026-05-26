@@ -77,12 +77,12 @@ class ChatSessionSimulator:
         log_prefix: str = "",
     ) -> List[List[Dict[str, str]]]:
         """
-        并行模拟 `num_samples` 条对话（内部使用批处理/并发）。
+        并行模拟 `num_samples` 条对话，内部使用批处理或并发。
 
-        Returns:
+        返回：
             长度为 `num_samples` 的完整对话转录列表。
         """
-        # 0. 参数校验与默认值
+        # 参数校验与默认值
         self._validate_session_inputs(
             task_desc,
             single_turn_prompt,
@@ -94,7 +94,7 @@ class ChatSessionSimulator:
             user_generation_kwargs,
         )
 
-        # 1. 每个会话的初始状态
+        # 每个会话的初始状态
         sessions: List[List[Dict[str, str]]] = [
             copy.deepcopy(chat_history or []) for _ in range(num_samples)
         ]
@@ -121,7 +121,7 @@ class ChatSessionSimulator:
             for _ in range(num_samples)
         ]
 
-        # 可选：为 vLLM 准备 PEFT 检查点（若本地模型包含 peft_config）
+        # 可选：为 vLLM 准备 PEFT 检查点，前提是本地模型包含 `peft_config`
         model_name = assistant_generation_kwargs.get("model")
         if (
             vllm_base_model is not None
@@ -179,7 +179,7 @@ class ChatSessionSimulator:
             if not asst_idx:
                 continue
 
-            # 生成助手回复（批量或并发）
+            # 生成助手回复，支持批量或并发
             if local_model is None and vllm_base_model is None:
                 num_asst = len(asst_idx)
                 cutoff = int(num_asst * proact_prompt_ratio)
@@ -238,7 +238,7 @@ class ChatSessionSimulator:
         self,
         batch_sess: List[List[Dict[str, str]]],
     ) -> List[List[Dict[str, str]]]:
-        """为对比式候选生成注入多样化的 system persona（系统角色提示）。"""
+        """为对比式候选生成注入多样化的 system persona（系统角色提示）"""
         persona_prompts = (
             SYSTEM_PROMPT_SOCRATIC_STRICT,
             SYSTEM_PROMPT_DIRECT_ANSWER,
@@ -280,7 +280,7 @@ class ChatSessionSimulator:
         else:
             lora_req = None
 
-        # vLLM 接受消息历史列表作为输入；返回 list[str]
+        # vLLM 接受消息历史列表作为输入，返回 `list[str]`
         if is_conversational({"prompt": batch_messages[0]}):
             outs = vllm_base_model.chat(
                 batch_messages,
@@ -346,7 +346,7 @@ class ChatSessionSimulator:
         torch.cuda.empty_cache()
         return results
 
-    # 以下为辅助方法（参数校验、PEFT 管理等）
+    # 以下为辅助方法，包含参数校验和 PEFT 管理等
     def _write_peft_checkpoint(self, local_model, model_name: str):
         """
         将本地模型保存为 PEFT 检查点（如需）。
@@ -387,10 +387,8 @@ class ChatSessionSimulator:
         """
         在开始会话前对所有参数进行基本校验。
 
-        抛出
-        ------
-        ValueError
-            若有任何不满足运行器要求的不变量则抛出。
+        Raises:
+            ValueError: 若有任何不满足运行器要求的不变量则抛出。
         """
         if not isinstance(task_desc, str) or not task_desc.strip():
             raise ValueError("`task_desc` must be a non-empty string.")
@@ -448,8 +446,8 @@ class ChatSessionSimulator:
 
         # 过滤出有效的采样参数
         generation_kwargs = copy.deepcopy(generation_kwargs)
-        generation_kwargs.pop("model", None)  # 'model' is not a sampling param
-        sampling_kwargs = {"max_tokens": 1024}  # 默认 max_tokens
+        generation_kwargs.pop("model", None)  # `model` 不是采样参数
+        sampling_kwargs = {"max_tokens": 1024}  # 默认 `max_tokens`
         unmapped_params = []
 
         for key, value in generation_kwargs.items():
@@ -466,13 +464,13 @@ class ChatSessionSimulator:
 
     def _should_terminate_conversation(self, response: str) -> bool:
         """
-        Check if the response contains a termination signal.
+        检查回复中是否包含终止信号。
 
         Args:
-            response: The response text to check
+            response: 待检查的回复文本
 
         Returns:
-            True if conversation should terminate, False otherwise
+            如果对话应当终止则返回 True，否则返回 False
         """
         try:
             return COLLABLLM_TERMINATION_SIGNAL in response
@@ -481,7 +479,7 @@ class ChatSessionSimulator:
             return False
 
     def _log_response(self, role: str, response: str, prefix: str = "") -> None:
-        """Log the response if verbose mode is enabled and on main process."""
+        """如果启用了详细日志模式且在主进程上，则记录回复日志。"""
         logger.info(
             f"{prefix}[rank {os.environ.get('RANK', 0)}]{role.capitalize()}: {response}"
         )

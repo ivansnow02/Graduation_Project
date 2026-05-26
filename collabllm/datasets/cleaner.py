@@ -3,14 +3,7 @@ collabllm.datasets.cleaner
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 数据清洗与质量筛选工具。
 
-该模块负责：
-
-1. 读取原始 JSON / JSONL 数据。
-2. 将原始数据解析为 `TeachingSession`。
-3. 执行格式校验、内容过滤与质量评分。
-4. 进行按主题与质量平衡的抽样。
-
-输出通常为清洗后的会话集合，以及对应的统计信息与丢弃样本记录。
+该模块负责读取原始 JSON / JSONL 数据，将原始数据解析为 TeachingSession，并执行格式校验、内容过滤与质量评分，以及按主题与质量平衡的抽样。
 """
 
 import argparse
@@ -153,7 +146,7 @@ class DataCleaner:
         检查内容质量：防止泄题、防止讲课模式、强制提问
         """
         # 预编译正则，提高速度
-        # 1. 显式泄露：直接给出定义、公式、结果
+        # 显式泄露：直接给出定义、公式、结果
         leaked_patterns = [
             r"答案(是|为)",
             r"结果(是|为|等于)",
@@ -202,32 +195,32 @@ class DataCleaner:
 
     def evaluate_session(self, session: TeachingSession) -> dict:
         """
-        Calculates full metrics for the session using the shared metrics utility.
-        Assists in both scoring and detailed filtering checks.
+        使用共享指标工具计算会话的完整指标。
+        辅助进行评分和详细的过滤检查。
         """
         if not session.annotations:
             return {"total_score": 0.0}
 
-        # Ensure turn-level scores are assigned (if used for downstream RL/DPO)
+        # 确保分配了单轮得分（如果用于下游 RL/DPO）
         self.assign_turn_scores(session)
 
-        # Calculate session-level metrics
+        # 计算会话级别的指标
         return calculate_session_metrics(session)
 
     def _select_top_percentile(
         self, sessions: List[TeachingSession], percentile: float = 0.35
     ) -> List[TeachingSession]:
         """
-        Select the top `percentile` fraction of sessions based on quality_score.
+        基于 quality_score 选择前百分之 `percentile` 的会话。
         """
         if not sessions:
             return []
 
-        # Sort by score descending
+        # 按得分降序排序
         sessions.sort(key=lambda s: s.quality_score, reverse=True)
 
         count = int(len(sessions) * percentile)
-        # Ensure at least some minimum if data exists
+        # 如果存在数据，确保保留至少最低数量的样本
         count = max(count, min(len(sessions), 100))
 
         logger.info(
@@ -241,10 +234,10 @@ class DataCleaner:
     def _select_balanced_samples(self, target_count: int) -> List[TeachingSession]:
         """
         保持多样性的同时追求质量的算法：
-        1. 按 topic_id 分组
-        2. 每个 topic 组内按 quality_score 倒序排列
-        3. 相对均匀地从各 topic 中取样本，直到达到目标数量 target_count
-        4. 优先从高质量 topic 中多取，低质量 topic 中少取
+        按 topic_id 分组。
+        每个 topic 组内按 quality_score 倒序排列。
+        相对均匀地从各 topic 中取样本，直到达到目标数量 target_count。
+        优先从高质量 topic 中多取，低质量 topic 中少取。
 
         Args:
             target_count (int): 目标样本总数
@@ -253,23 +246,23 @@ class DataCleaner:
             List[TeachingSession]: 平衡的样本列表
         """
         logger.info(
-            f"Phase 2: Selecting balanced {target_count} samples (diversity + quality)..."
+            f"阶段 2: 选择平衡的 {target_count} 个样本（多样性 + 质量）..."
         )
 
-        # Step 1: 按 topic_id 分组
+        # 第一步：按 topic_id 分组
         from collections import defaultdict
 
         topic_groups = defaultdict(list)
         for session in self.valid_sessions:
             topic_groups[session.topic_id].append(session)
 
-        logger.info(f"Found {len(topic_groups)} unique topics")
+        logger.info(f"找到 {len(topic_groups)} 个唯一主题")
 
-        # Step 2: 每个 topic 内排序
+        # 第二步：每个 topic 内按得分降序排序
         for topic_id in topic_groups:
             topic_groups[topic_id].sort(key=lambda x: x.quality_score, reverse=True)
 
-        # Step 3: 计算每个 topic 的配额（基于均衡分配）
+        # 第三步：计算每个 topic 的配额（基于均衡分配）
         num_topics = len(topic_groups)
 
         # 最小化方案：确保每个 topic 至少取 1 条，剩余容量分配给高质量 topic
@@ -294,7 +287,7 @@ class DataCleaner:
             top_topic_ids = [tid for tid, _ in top_topics[:target_count]]
             topic_quotas = {tid: 1 for tid in top_topic_ids}
 
-        # Step 4: 从每个 topic 中取出配额内的最优样本
+        # 第四步：从每个 topic 中取出配额内的最优样本
         selected_data = []
         remaining_pool = []
 
@@ -354,11 +347,11 @@ class DataCleaner:
         for raw_dict in tqdm(self.load_data(), desc="Cleaning", dynamic_ncols=True):
             total += 1
 
-            # 1. Core Conversion: Dict -> Dataclass
+            # 核心转换：Dict -> Dataclass
             try:
                 session = TeachingSession.from_dict(raw_dict)
 
-                # 2. Basic Rule Filtering
+                # 基础规则过滤
                 passed, reason = self.filter_format(session)
                 if not passed:
                     self.stats[reason] += 1
@@ -379,14 +372,14 @@ class DataCleaner:
                     self.stats[reason] += 1
                     continue
 
-                # 2.5 Clean basic annotations
+                # 清理基础标注
                 removed = session.clean_empty_annotations()
                 if not session.annotations:
                     self.stats["empty_annotations_after_cleaning"] += 1
                     continue
 
-                # 3. Advanced Quality Scoring & Filtering
-                # Calculate full metrics
+                # 高级质量评分与过滤
+                # 计算完整指标
                 metrics = self.evaluate_session(session)
                 session.quality_score = metrics["total_score"]
 
@@ -417,7 +410,7 @@ class DataCleaner:
             f"Advanced Constraints Drops: IKT={metrics_stats['low_ikt']}, Variety={metrics_stats['low_variety']}"
         )
 
-        # 4. Soft 过滤：顶级百分位与多样性平衡
+        # 弹性过滤：顶级百分位与多样性平衡
         # 用户策略："摘樱桃"（优先挑选最优样本） - 顶端 30%-40%
 
         # Sort valid sessions by score descending first
@@ -477,7 +470,7 @@ class DataCleaner:
                 ann = norm_to_ann.get(norm_key)
 
                 if ann:
-                    # 1. 提取策略指标 (SD & SV)
+                    # 提取策略指标 (SD & SV)
                     strat = getattr(ann, "teaching_strategy", "")
                     unique_strats = set()
                     if strat:
@@ -491,11 +484,11 @@ class DataCleaner:
                     metric_sd = 1.0 if unique_strats else 0.0
                     metric_sv = min(len(unique_strats) / 8.0, 1.0)
 
-                    # 2. 跨学科指标 (IKT)
+                    # 跨学科指标 (IKT)
                     transfer = getattr(ann, "discipline_transfer", "")
                     metric_ikt = 1.0 if transfer in ["是", "Yes", True] else 0.0
 
-                    # 3. 意图指标 (SC)
+                    # 意图指标 (SC)
                     intent = getattr(ann, "teacher_intent", "")
                     intents_covered = set()
                     if intent:
@@ -507,11 +500,11 @@ class DataCleaner:
                                     intents_covered.add(canonical_intent)
                     metric_sc = min(len(intents_covered) / 4.0, 1.0)
 
-                    # 4. 引导等级 (L3GR)
+                    # 引导等级 (L3GR)
                     guidance = getattr(ann, "teacher_guidance_level", "")
                     metric_l3gr = 1.0 if "L3" in guidance else 0.0
 
-                    # 5. 加权汇总
+                    # 加权汇总
                     # 权重分配参考 calculate_score: 0.15, 0.10, 0.15, 0.15, 0.10
                     weighted_sum = (
                         0.15 * metric_sd
@@ -536,11 +529,11 @@ class DataCleaner:
         with open(self.output_path, "w", encoding="utf-8") as f:
             if self.output_path.endswith(".jsonl"):
                 for item in data:
-                    # Convert Dataclass to dict for JSON serialization
+                    # 转换 Dataclass 为 dict 以进行 JSON 序列化
                     data_dict = item.to_dict()
                     f.write(json.dumps(data_dict, ensure_ascii=False) + "\n")
             else:
-                # Convert list of Dataclasses to list of dicts
+                # 转换 Dataclass 列表为 dict 列表
                 serializable_data = [item.to_dict() for item in data]
                 json.dump(serializable_data, f, ensure_ascii=False, indent=2)
 

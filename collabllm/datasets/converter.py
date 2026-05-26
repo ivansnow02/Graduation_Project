@@ -4,8 +4,8 @@ collabllm.datasets.converter
 将 TeachingSession 转换为 CollabLLM 标准格式的工具模块。
 
 支持的转换格式：
-  1. 嵌套格式 (Nested Structure): 用于 MultiturnDataset 加载
-  2. 扁平格式 (Flat List): 备选的扁平化表示
+- 嵌套格式 (Nested Structure): 用于 MultiturnDataset 加载
+- 扁平格式 (Flat List): 备选的扁平化表示
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -99,7 +99,7 @@ def convert_session_to_nested(
         logger.warning(f"Session {session.student_id} has empty dialogue, skipping")
         return None
 
-    # 1. 构建元数据
+    # 构建元数据
     metadata = {
         "source": "SID",
         "student_type": session.student_type,
@@ -114,7 +114,7 @@ def convert_session_to_nested(
     if extra_metadata:
         metadata.update(extra_metadata)
 
-    # 2. 生成 conv_id
+    # 生成 conv_id
     content_hash = get_content_hash(
         [{"role": d.role, "content": d.content} for d in session.dialogue]
     )
@@ -122,7 +122,7 @@ def convert_session_to_nested(
         f"{session.topic_id}_{session.student_id}_{session.repeat_id}_{content_hash}"
     )
 
-    # 3. 提取 single_turn_prompt 和 single_turn_completion
+    # 提取 single_turn_prompt 和 single_turn_completion
     # 通常：第一个学生消息作为 single_turn_prompt，对应的第一个教师回复作为 single_turn_completion
     single_turn_prompt = ""
     single_turn_completion = ""
@@ -142,7 +142,7 @@ def convert_session_to_nested(
     if not single_turn_prompt:
         single_turn_prompt = session.topic_text
 
-    # 4. 构建多轮对话 turns
+    # 构建多轮对话 turns
     turns = []
     history = []  # 累积的对话历史
 
@@ -152,9 +152,10 @@ def convert_session_to_nested(
         # 当遇到教师（assistant）回复时，创建一个训练样本
         if normalized_role == "assistant":
             if history:  # 确保有历史对话
-                # 优先级: 1. turn 自身的 score (单轮分)
-                #        2. session 的 quality_score (全局分)
-                #        3. 默认值 1.0
+                # 优先级:
+                # - turn 自身的 score (单轮分)
+                # - session 的 quality_score (全局分)
+                # - 默认值 1.0
                 if turn.score is not None:
                     score = turn.score
                 elif use_quality_score:
