@@ -46,3 +46,5 @@ docs/
 .vercel
 llama.cpp/
 .serena/
+*.txt
+!collabllm/prompts/

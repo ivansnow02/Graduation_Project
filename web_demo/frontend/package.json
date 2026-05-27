@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "bun test tests",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "marked": "^15.0.0",
     "openai": "^6.34.0",
     "vue": "^3.5.13"
