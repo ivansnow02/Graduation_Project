@@ -112,7 +112,14 @@ function stripSuffix(value: string, suffix: string) {
 }
 
 function normalizeModelName(value: string) {
-  return value.replace(/^dpo(?=\d)/, "dpo_");
+  const trimmed = value.trim();
+  const ablationMatch = trimmed.match(/^g0*(\d+)$/i);
+  if (ablationMatch) return `g${Number(ablationMatch[1])}`;
+  return trimmed.replace(/^dpo(?=\d)/, "dpo_");
+}
+
+export function isAblationModelName(value: string) {
+  return /^g(?:[1-9]|1[01])$/i.test(normalizeModelName(value));
 }
 
 function shouldIgnorePath(path: string) {

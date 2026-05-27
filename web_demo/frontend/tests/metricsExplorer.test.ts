@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseMetricsZipEntries } from "../src/composables/useMetricsExplorer";
+import {
+  isAblationModelName,
+  parseMetricsZipEntries,
+} from "../src/composables/useMetricsExplorer";
 
 const dialogueRecord = {
   student_id: "Student_1",
@@ -109,5 +112,21 @@ describe("parseMetricsZipEntries", () => {
     expect(result.rows).toHaveLength(2);
     expect(result.warnings.some((item) => item.message.includes("不是有效 JSON"))).toBe(true);
     expect(result.warnings.some((item) => item.message.includes("仅按行号匹配"))).toBe(true);
+  });
+
+  test("归一化 G 组命名并识别消融实验", () => {
+    const result = parseMetricsZipEntries({
+      "final/G010/dialogue_topic_1.jsonl": `${JSON.stringify(dialogueRecord)}\n`,
+      "metrics/g10.json": JSON.stringify({
+        total_dialogues_processed: 1,
+        average_scores: { TotalScore: "0.7759" },
+      }),
+    });
+
+    expect(result.rows[0].modelName).toBe("g10");
+    expect(result.summaries[0].modelName).toBe("g10");
+    expect(isAblationModelName("G10")).toBe(true);
+    expect(isAblationModelName("g12")).toBe(false);
+    expect(isAblationModelName("baseline")).toBe(false);
   });
 });
