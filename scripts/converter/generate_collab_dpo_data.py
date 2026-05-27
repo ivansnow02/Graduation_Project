@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """生成 DPO 数据，输出为 collabllm 的嵌套格式。
 
-- 使用来自 `SID_benchmark/output/dialog/qwen-4b` 的基线对话（chosen）
-- 使用 SFT 模型或 API 生成被拒绝的对照回复（rejected）
-- 输出为与 `collabllm.datasets.MultiturnDataset` 兼容的嵌套 JSON
 """
 
 import argparse

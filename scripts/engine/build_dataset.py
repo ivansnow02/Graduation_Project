@@ -4,7 +4,7 @@
     - 一个实现于 `examples/single_turn_ds` 下的数据集类
     - （可选）任何自定义的 metric，放在 `examples/metrics`
 
-示例用法见脚本注释中的命令行参数示例（保留原示例以供参考）。
+示例用法见脚本注释中的命令行参数示例
 """
 
 import argparse
